@@ -28,7 +28,7 @@ def help():
     check.py -c filename    校验指定JSON文件里的文件
     check.py -g filename [ext1 ext2 ...]    生成JSON校验文件
     ext1等是要生成校验的文件的扩展名
-    如不知道默认列表为"mp4 webm m4a"。
+    如不指定，默认列表为"mp4 webm m4a"。
     注：程序需要UNIX工具sha256sum才能工作''')
 
 
@@ -92,7 +92,7 @@ def main(opt: dict):
             if exists(fn):
                 if getsize(fn) != i['size']:
                     print(f'\r文件大小不一致："{fn}"')
-                if getsha256(fn) != i['sha256']:
+                elif getsha256(fn) != i['sha256']:
                     print(f'\r文件sha256散列值不一致："{fn}"')
             else:
                 print(f'\r找不到文件："{fn}"')
