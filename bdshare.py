@@ -77,7 +77,11 @@ if __name__ == "__main__":
                 md52 = md.hexdigest()
                 if fs < limit_size:
                     md51 = md52
-                share = f'{md52}#{md51}#{fs}#{relpath(i,j["path"])}'
+                if j['path'] != "":
+                    pa = relpath(i, j["path"])
+                else:
+                    pa = split(i)[1]
+                share = f'{md52}#{md51}#{fs}#{pa}'
                 f2.write(share+'\n')
                 print(f"\r[{e}/{l}]:{share}")
         e = e + 1
