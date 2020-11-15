@@ -17,6 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import xlwt
 from requests import Session
+from requests.exceptions import RetryError
 from os import remove
 from os.path import exists
 from regex import search, I
@@ -79,7 +80,6 @@ fn = 'biliReleaseInfo.xls'
 if exists(fn):
     remove(fn)
 r = Session()
-r.trust_env = False
 w = xlwt.Workbook(encoding='utf8')
 a: xlwt.Worksheet = w.add_sheet('下载量')
 firstl = ['版本', 'origin', 'linux', 'mac',
@@ -91,6 +91,7 @@ for k in range(len(firstl)):
     c.width = int(c.width * firstlc[k])
 p = 1
 row = 1
+retry = 0
 while True:
     url = f"https://api.github.com/repos/lifegpc/bili/releases?page={p}"
     re = r.get(url)
@@ -106,7 +107,10 @@ while True:
             t.writetosheet(a, row)
             row = row + 1
     else:
-        break
+        retry = retry + 1
+        if retry == 3:
+            raise RetryError()
+        continue
     p = p + 1
 if row > 1:
     a.write(row, 0, '总计')
@@ -114,8 +118,10 @@ if row > 1:
     for k in range(6):
         z = chr(zc + k)
         a.write(row, k + 1, xlwt.Formula(f"SUM({z}2:{z}{row})"))
+    a.write(row, 7, xlwt.Formula(f"SUM(B{row+1}:G{row+1})"))
     a.write(row + 1, 0, '平均')
     for k in range(6):
         z = chr(zc + k)
-        a.write(row + 1, k + 1, xlwt.Formula(f"SUM({z}2:{z}{row})/COUNTA({z}2:{z}{row})"))
+        a.write(row + 1, k + 1,
+                xlwt.Formula(f"SUM({z}2:{z}{row})/COUNTA({z}2:{z}{row})"))
 w.save(fn)
