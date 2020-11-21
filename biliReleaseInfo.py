@@ -1,5 +1,5 @@
 # biliReleaseInfo.py
-# v1.0.0
+# v1.0.1
 # (C) 2020 lifegpc
 # The repo location: https://github.com/lifegpc/pythonscript
 #
@@ -31,6 +31,10 @@ class downloaddata:
     windows = None
     windows10_x64 = None
     windows10_x64_exe = None
+    windows_x64 = None
+    windows_x64_exe = None
+    windows_x86 = None
+    windows_x86_exe = None
 
     def __f(self, n):
         return n if n is not None else ''
@@ -43,6 +47,10 @@ class downloaddata:
         a.write(r, 4, self.__f(self.windows))
         a.write(r, 5, self.__f(self.windows10_x64))
         a.write(r, 6, self.__f(self.windows10_x64_exe))
+        a.write(r, 7, self.__f(self.windows_x64))
+        a.write(r, 8, self.__f(self.windows_x64_exe))
+        a.write(r, 9, self.__f(self.windows_x86))
+        a.write(r, 10, self.__f(self.windows_x86_exe))
 
 
 def writedownloaddata(d: downloaddata, t: dict):
@@ -74,6 +82,22 @@ def writedownloaddata(d: downloaddata, t: dict):
     if x is not None:
         d.windows10_x64_exe = c
         return
+    x = search(
+        r'^bili_\d+\.\d+\.\d+(\.\d+\.[0-9a-f]+\.)?_windows_x64\.7z$', n, I)
+    if x is not None:
+        d.windows_x64 = c
+    x = search(
+        r'^bili_\d+\.\d+\.\d+(\.\d+\.[0-9a-f]+\.)?_windows_x64\.exe$', n, I)
+    if x is not None:
+        d.windows_x64_exe = c
+    x = search(
+        r'^bili_\d+\.\d+\.\d+(\.\d+\.[0-9a-f]+\.)?_windows_x86\.7z$', n, I)
+    if x is not None:
+        d.windows_x86 = c
+    x = search(
+        r'^bili_\d+\.\d+\.\d+(\.\d+\.[0-9a-f]+\.)?_windows_x86\.exe$', n, I)
+    if x is not None:
+        d.windows_x86_exe = c
 
 
 fn = 'biliReleaseInfo.xls'
@@ -82,9 +106,9 @@ if exists(fn):
 r = Session()
 w = xlwt.Workbook(encoding='utf8')
 a: xlwt.Worksheet = w.add_sheet('下载量')
-firstl = ['版本', 'origin', 'linux', 'mac',
-          'windows', 'windows10_x64', 'windows10_x64_exe']
-firstlc = [1.2, 0.7, 0.5, 0.5, 0.7, 1.2, 1.5]
+firstl = ['版本', 'origin', 'linux', 'mac', 'windows', 'windows10_x64',
+          'windows10_x64_exe', 'windows_x64', 'windows_x64_exe', 'window_x86', 'windows_x86_exe']
+firstlc = [1.2, 0.7, 0.5, 0.5, 0.7, 1.2, 1.6, 1.1, 1.5, 1.1, 1.5]
 for k in range(len(firstl)):
     a.write(0, k, firstl[k])
     c: xlwt.Column = a.col(k)
@@ -115,12 +139,13 @@ while True:
 if row > 1:
     a.write(row, 0, '总计')
     zc = 66
-    for k in range(6):
+    for k in range(10):
         z = chr(zc + k)
         a.write(row, k + 1, xlwt.Formula(f"SUM({z}2:{z}{row})"))
-    a.write(row, 7, xlwt.Formula(f"SUM(B{row+1}:G{row+1})"))
+    for i in range(1, row + 1):
+        a.write(i, 11, xlwt.Formula(f"SUM(B{i+1}:K{i+1})"))
     a.write(row + 1, 0, '平均')
-    for k in range(6):
+    for k in range(11):
         z = chr(zc + k)
         a.write(row + 1, k + 1,
                 xlwt.Formula(f"SUM({z}2:{z}{row})/COUNTA({z}2:{z}{row})"))
