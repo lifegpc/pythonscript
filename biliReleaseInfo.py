@@ -106,9 +106,9 @@ if exists(fn):
 r = Session()
 w = xlwt.Workbook(encoding='utf8')
 a: xlwt.Worksheet = w.add_sheet('下载量')
-firstl = ['版本', 'origin', 'linux', 'mac', 'windows', 'windows10_x64',
-          'windows10_x64_exe', 'windows_x64', 'windows_x64_exe', 'window_x86', 'windows_x86_exe']
-firstlc = [1.2, 0.7, 0.5, 0.5, 0.7, 1.2, 1.6, 1.1, 1.5, 1.1, 1.5]
+firstl = ['版本', 'origin', 'linux', 'mac', 'windows', 'windows10_x64', 'windows10_x64_exe',
+          'windows_x64', 'windows_x64_exe', 'window_x86', 'windows_x86_exe', '总计']
+firstlc = [1.2, 0.7, 0.5, 0.5, 0.7, 1.2, 1.6, 1.1, 1.5, 1.1, 1.5, 0.7]
 for k in range(len(firstl)):
     a.write(0, k, firstl[k])
     c: xlwt.Column = a.col(k)
@@ -149,4 +149,7 @@ if row > 1:
         z = chr(zc + k)
         a.write(row + 1, k + 1,
                 xlwt.Formula(f"SUM({z}2:{z}{row})/COUNTA({z}2:{z}{row})"))
+a.set_panes_frozen('1')
+a.set_vert_split_pos(1)
+a.set_horz_split_pos(1)
 w.save(fn)
