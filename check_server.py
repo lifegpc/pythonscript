@@ -152,9 +152,15 @@ class Main:
             self._ssl.connect((ip, 443))
             if self._match_host:
                 match_hostname(self._ssl.getpeercert(), url.hostname)
-            text = f'GET {url.path} HTTP/1.1\r\n'
+            if url.query != '':
+                p = url.path + '?' + url.query
+            else:
+                p = url.path
+            text = f'GET {p} HTTP/1.1\r\n'
             text += f'Accept: */*\r\nHost: {url.hostname}\r\n'
             text += 'Connection: Keep-Alive\r\n'
+            if self._opt.verbose:
+                print(text)
             self._ssl.send(bytes(text + '\r\n', 'utf-8'))
             data = str(self._ssl.recv(2048), 'utf-8')
             if self._opt.verbose:
