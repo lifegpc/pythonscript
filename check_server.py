@@ -1,7 +1,7 @@
 from getopt import GetoptError, getopt
 from json import load as loadjson, dump as savejson
 from os.path import exists
-from socket import AF_INET, SOCK_STREAM, socket
+from socket import AF_INET, SOCK_STREAM, socket, timeout as SocketTimeout
 from ssl import (
     CERT_REQUIRED,
     SSLCertVerificationError,
@@ -160,6 +160,7 @@ class Main:
             text += f'Accept: */*\r\nHost: {url.hostname}\r\n'
             text += 'Connection: Keep-Alive\r\n'
             if self._opt.verbose:
+                print(ip)
                 print(text)
             self._ssl.send(bytes(text + '\r\n', 'utf-8'))
             data = str(self._ssl.recv(2048), 'utf-8')
@@ -168,16 +169,28 @@ class Main:
             code = data.split()[1]
             if self._opt.verbose:
                 print(f'Code: {code}')
+            ok = False
             if code == '200':
-                return True
+                ok = True
+            self._ssl.close()
+            self._s.close()
+            return ok
         except SSLCertVerificationError as e:
             print(ip, e.args)
             if url.hostname not in self._te:
                 self._te[url.hostname] = []
             self._te[url.hostname].append(ip)
+            self._ssl.close()
+            self._s.close()
+            return False
+        except SocketTimeout:
+            print(f"{ip} timeout")
+            self._ssl.close()
+            self._s.close()
             return False
         except Exception:
             from traceback import print_exc
+            print(ip)
             print_exc()
             self._ssl.close()
             self._s.close()
