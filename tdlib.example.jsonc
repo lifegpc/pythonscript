@@ -2,19 +2,19 @@
     "TdlibParameters": { // Detailed information is availabled on https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1tdlib_parameters.html
         "api_id": 12345678, // Application identifier for Telegram API access, which can be obtained at https://my.telegram.org.
         "api_hash": "1234567890abcdef0123456789abcdef", // Application identifier hash for Telegram API access, which can be obtained at https://my.telegram.org.
-        "database_directory": "/path/to/database" // The path to the directory for the persistent database; if empty, the current working directory will be used.
+        "database_directory": "/path/to/database" // Optional. The path to the directory for the persistent database; if empty, the current working directory will be used.
     },
     "encryption_key": "Base64 encoded's key",  // Encryption key to check or set up. Need base64 encoded.
-    "proxy": { // Specify proxy
+    "proxy": { // Optional. Specify proxy
         "server": "127.0.0.1",
         "port": 1080,
         "type": {
             "@type": "proxyTypeHttp", // Support proxyTypeHttp, proxyTypeSocks5, proxyTypeMtproto
-            "username": "username", // Supported if @type is proxyTypeHttp or proxyTypeSocks5
-            "password": "password", // Supported if @type is proxyTypeHttp or proxyTypeSocks5
-            "http_only": false, // Pass true if the proxy supports only HTTP requests and doesn't support transparent TCP connections via HTTP CONNECT method. Supported if @type is proxyTypeHttp.
-            "secret": "1234567890abcdef" // The proxy's secret in hexadecimal encoding. Supported if @type is proxyTypeMtproto.
+            "username": "username", // Optional. Supported if @type is proxyTypeHttp or proxyTypeSocks5
+            "password": "password", // Optional. Supported if @type is proxyTypeHttp or proxyTypeSocks5
+            "http_only": false, // Optional. Pass true if the proxy supports only HTTP requests and doesn't support transparent TCP connections via HTTP CONNECT method. Supported if @type is proxyTypeHttp.
+            "secret": "1234567890abcdef" // Optional. The proxy's secret in hexadecimal encoding. Supported if @type is proxyTypeMtproto.
         }
     },
-    "phone_number": "+11234567890" // User's phone number
+    "phone_number": "+11234567890" // Optional. User's phone number
 }
