@@ -132,7 +132,7 @@ class Main:
 
     def add(self, id: str, cookies: Dict[str, str]):
         try:
-            r = self.request('add', id=id, cookies=cookies,
+            r = self.request('post', 'add', id=id, cookies=cookies,
                              headers={"referrer": "https://www.dlsite.com/"})
             if r.status_code == 200:
                 j = r.json()
@@ -161,7 +161,7 @@ class Main:
 
     def exists(self, id: str) -> bool:
         try:
-            r = self.request('exists', id=id)
+            r = self.request('post', 'exists', id=id)
             if r.status_code == 200:
                 j = r.json()
                 if j['code'] != 0:
@@ -177,7 +177,7 @@ class Main:
 
     def gen(self, id: str, target: str) -> str:
         try:
-            r = self.request('gen', id=id, target=target,
+            r = self.request('post', 'gen', id=id, target=target,
                              e=round(time() + 3600))
             if r.status_code == 200:
                 j = r.json()
@@ -272,7 +272,7 @@ class Main:
     def overrideOld(self) -> bool:
         return self._s.overrideOld
 
-    def request(self, action: str, stream: bool = False, **kw):
+    def request(self, method: str, action: str, stream: bool = False, **kw):
         url = f'{self.APIEntry}/{action}'
         se = {'t': [str(round(time()))], 'a': [action]}
         for i in kw:
@@ -287,8 +287,7 @@ class Main:
         se['sign'] = [sg]
         for i in se:
             se[i] = se[i][0]
-        url += "?" + urlencode(se)
-        re = self._ses.get(url, stream=stream)
+        re = self._ses.request(method, url, data=se, stream=stream)
         return re
 
     def run(self, argv: List[str]) -> int:
