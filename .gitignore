@@ -132,4 +132,6 @@ dmypy.json
 *.txt
 *.xls
 *.json
+*.jsonc
 *.pyi
+!*.example.jsonc
