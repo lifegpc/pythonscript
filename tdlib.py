@@ -322,6 +322,23 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return None
 
+    async def getChatHistory(self, chat_id: int, from_message_id: int = None,
+                             offset: int = None, limit: int = 20,
+                             only_local: bool = False):
+        d = {"@type": 'getChatHistory', "chat_id": chat_id, "limit": limit,
+             "only_local": only_local}
+        if from_message_id is not None:
+            d['from_message_id'] = from_message_id
+        if offset is not None:
+            d['offset'] = offset
+        re = await self._send(d)
+        if re['@type'] == 'messages':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def getMe(self):
         re = await self._send({"@type": "getMe"})
         if re['@type'] == 'user':
