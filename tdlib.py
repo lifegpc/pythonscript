@@ -445,6 +445,15 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return None
 
+    async def searchPublicChats(self, query: str):
+        re = await self._send({"@type": "searchPublicChats", "query": query})
+        if re['@type'] == 'chats':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def setAuthenticationPhoneNumber(self, phone_number, settings=None):
         sett = {"@type": "phoneNumberAuthenticationSettings",
                 "allow_flash_call": False,

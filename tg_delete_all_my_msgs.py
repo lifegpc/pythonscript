@@ -28,8 +28,13 @@ async def get_chat_id_from_name(lib: TdLib, name: str) -> int:
         raise ValueError('Can not found chat.')
     le = len(re['chat_ids'])
     if le == 0:
-        raise ValueError('No chat found.')
-    elif le == 1:
+        re = await lib.searchPublicChats(name)
+        if re is None:
+            raise ValueError('Can not search public chats.')
+        le = len(re['chat_ids'])
+        if le == 0:
+            raise ValueError('No chat found.')
+    if le == 1:
         return re['chat_ids'][0]
     else:
         raise NotImplementedError('Multiply chat is returned.')
