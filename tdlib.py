@@ -1,12 +1,13 @@
 import asyncio
 from ctypes import CDLL, c_char_p, c_double, c_int, c_void_p
 from ctypes.util import find_library
+from enum import Enum
+from getpass import getpass
+from json import dumps, loads, JSONDecoder, JSONEncoder
+from random import random
 import sys
-from json import dumps, loads
 from threading import Thread
 from traceback import print_exc
-from random import random
-from getpass import getpass
 from typing import List
 
 
@@ -75,6 +76,78 @@ class UpdateThread(Thread):
                 print_exc()
 
 
+class ChatType(Enum):
+    BasicGroup = 0
+    Private = 1
+    Secret = 2
+    SuperGroup = 3
+
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self):
+        if self._value_ == 0:
+            return {"@type": "chatTypeBasicGroup",
+                    "basic_group_id": self.basic_group_id}
+        elif self._value_ == 1:
+            return {"@type": 'chatTypePrivate', 'user_id': self.user_id}
+        elif self._value_ == 2:
+            return {"@type": "chatTypeSecret",
+                    "secret_chat_id": self.secret_chat_id,
+                    "user_id": self.user_id}
+        elif self._value_ == 3:
+            return {"@type": "chatTypeSupergroup",
+                    "supergroup_id": self.supergroup_id,
+                    "is_channel": self.is_channel}
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if isinstance(value, dict):
+            if value['@type'] == 'chatTypeBasicGroup':
+                re = cls(0)
+                re.basic_group_id = int(value['basic_group_id'])
+                return re
+            elif value['@type'] == 'chatTypePrivate':
+                re = cls(1)
+                re.user_id = int(value['user_id'])
+                return re
+            elif value['@type'] == 'chatTypeSecret':
+                re = cls(2)
+                re.secret_chat_id = int(value['secret_chat_id'])
+                re.user_id = int(value['user_id'])
+                return re
+            elif value['@type'] == 'chatTypeSupergroup':
+                re = cls(3)
+                re.supergroup_id = int(value['supergroup_id'])
+                re.is_channel = bool(value['is_channel'])
+                return re
+        raise ValueError(f'Unknown value: {value}')
+
+
+def json_object_hook(value):
+    try:
+        if isinstance(value, dict):
+            if '@type' in value:
+                if value['@type'].startswith('chatType'):
+                    return ChatType(value)
+    except Exception:
+        print_exc()
+        return value
+    return value
+
+
+class TdLibJSONDecoder(JSONDecoder):
+    def __init__(self, *k, **kw) -> None:
+        super().__init__(*k, object_hook=json_object_hook, **kw)
+
+
+class TdLibJSONEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ChatType):
+            return dict(o)
+        return super().default(o)
+
+
 class TdLib:
     def __init__(self) -> None:
         self._initalized = False
@@ -114,7 +187,8 @@ class TdLib:
     async def _send(self, data):
         extra = random()
         data['@extra'] = extra
-        data = dumps(data, ensure_ascii=False).encode()
+        en = TdLibJSONEncoder(ensure_ascii=False)
+        data = en.encode(data).encode()
         _td_json_client_send(self._client_id, data)
         while True:
             if extra in self._re:
@@ -125,7 +199,8 @@ class TdLib:
     def _update(self):
         result: bytes = _td_json_client_receive(self._client_id, 1.0)
         if result:
-            re = loads(result.decode())
+            de = TdLibJSONDecoder()
+            re = de.decode(result.decode())
             if '@extra' in re:
                 self._re[re['@extra']] = re
             else:
@@ -237,6 +312,15 @@ class TdLib:
             if re['@type'] == 'error':
                 print(f"{re['code']} {re['message']}")
             return False
+
+    async def getChat(self, chat_id: int):
+        re = await self._send({"@type": "getChat", "chat_id": chat_id})
+        if re['@type'] == 'chat':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
 
     async def getMe(self):
         re = await self._send({"@type": "getMe"})

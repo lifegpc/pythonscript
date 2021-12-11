@@ -42,6 +42,21 @@ async def main(lib: TdLib, arg):
                            se.get("proxy"), se.get("phone_number")):
         raise ValueError('Can not login')
     chat_id = arg.chat_id if arg.chat_id is not None else await get_chat_id_from_name(lib, arg.chat_name)  # noqa: E501
+    chat = await lib.getChat(chat_id)
+    if chat is None:
+        print('Chat not found.')
+        return -1
+    print('Chat information:')
+    print(f"Chat ID: {chat['id']}")
+    print(f"Chat Title: {chat['title']}")
+    print(f"Chat Type: {chat['type']}")
+    yes = False
+    if not yes:
+        inp = input('Do you want to delete messages in this chat?(y/n)')
+        if inp[0].lower() == 'y':
+            yes = True
+    if not yes:
+        return 0
     re = await lib.deleteAllMyMessageInChat(chat_id, arg.start_time, arg.end_time)  # noqa: E501
     print(re)
     return 0 if re else -1
