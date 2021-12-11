@@ -37,7 +37,25 @@ async def get_chat_id_from_name(lib: TdLib, name: str) -> int:
     if le == 1:
         return re['chat_ids'][0]
     else:
-        raise NotImplementedError('Multiply chat is returned.')
+        k = 1
+        for i in re['chat_ids']:
+            c = await lib.getChat(i)
+            if c is None:
+                raise ValueError('Chat not found.')
+            print(f"{k:02}. Chat ID: \t{i}")
+            print(f"    Chat Title: {c['title']}")
+            print(f"    Chat Type: \t{c['type']}")
+            k += 1
+        while True:
+            inp = input('Please select one chat: ')
+            try:
+                i = int(inp)
+                if i >= 1 and i <= le:
+                    return re['chat_ids'][i - 1]
+                if i in re['chat_ids']:
+                    return i
+            except ValueError:
+                pass
 
 
 async def main(lib: TdLib, arg):
