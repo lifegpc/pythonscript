@@ -64,7 +64,7 @@ class Lyric:
         if offset is None:
             return
         for i in self._l:
-            i['time'] = max(0, round((i['time'] * 1000 - offset) / 1000, 2))
+            i['time'] = max(0, round((i['time'] * 1000 + offset) / 1000, 2))
 
     def convert_translate_type(self, dur: Optional[float]):
         self._l.sort(key=lambda d: d['time'])
