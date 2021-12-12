@@ -1,4 +1,5 @@
 import asyncio
+from base64 import b64encode
 from ctypes import CDLL, c_char_p, c_double, c_int, c_void_p
 from ctypes.util import find_library
 from enum import Enum
@@ -145,6 +146,8 @@ class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
         if isinstance(o, ChatType):
             return dict(o)
+        elif isinstance(o, bytes):
+            return b64encode(o).decode()
         return super().default(o)
 
 
@@ -213,7 +216,7 @@ class TdLib:
             re = de.decode(result.decode())
             if self._v:
                 if '@type' in re:
-                    print(f'Get message type: {re["@type"]}')
+                    print(f'Get a new message. Message type: {re["@type"]}')
             if '@extra' in re:
                 self._re[re['@extra']] = re
             else:
@@ -322,6 +325,31 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return False
 
+    async def editMessageText(self, chat_id: int, message_id: int, text: str,
+                              entities=None,
+                              disable_web_page_preview: bool = False,
+                              clear_draft: bool = False):
+        if entities is None:
+            entities = await self.getTextEntities(text)
+            if entities is None:
+                return None
+            entities = entities['entities']
+        d = {'@type': 'editMessageText', 'chat_id': chat_id,
+             'message_id': message_id, 'input_message_content': {
+                 '@type': 'inputMessageText',
+                 'text': {'@type': 'formattedText', 'text': text,
+                          'entities': entities},
+                 'disable_web_page_preview': disable_web_page_preview,
+                 'clear_draft': clear_draft
+             }}
+        re = await self._send(d)
+        if re['@type'] == 'message':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def enableProxy(self, proxy_id):
         re = await self._send({"@type": "enableProxy", "proxy_id": proxy_id})
         if re['@type'] == 'ok':
@@ -370,6 +398,15 @@ class TdLib:
         while not self._db_initalized:
             await asyncio.sleep(0.1)
         return await self._send({"@type": "getProxies"})
+
+    async def getTextEntities(self, text: str):
+        re = await self._send({"@type": "getTextEntities", "text": text})
+        if re['@type'] == 'textEntities':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
 
     async def getUid(self) -> int:
         if not hasattr(self, "_uid"):
