@@ -8,6 +8,7 @@ try:
     from _rssbotlib import AVDict, version, VideoInfo
     have_rssbotlib = True
 except ImportError:
+    AVDict = None
     have_rssbotlib = False
 
 
