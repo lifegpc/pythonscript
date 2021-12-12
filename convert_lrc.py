@@ -54,6 +54,42 @@ class Lyric:
         self._bom = False
         self._has_dur = True
 
+    def apply_offset(self):
+        offset = None
+        for m in self._meta:
+            if m.startswith('offset:'):
+                offset = int(m.lstrip('offset:'))
+                self._meta.remove(m)
+                break
+        if offset is None:
+            return
+        for i in self._l:
+            i['time'] = max(0, round((i['time'] * 1000 - offset) / 1000, 2))
+
+    def convert_translate_type(self, dur: Optional[float]):
+        self._l.sort(key=lambda d: d['time'])
+        re = []
+        ltmp = 0
+        tmp = None
+        for i in self._l:
+            if tmp is not None:
+                re.append({'time': max(ltmp, round(i['time'] - 0.01, 2)),
+                           'data': tmp})
+                tmp = None
+            s: str = i['data']
+            if s.find(' / ') > 0:
+                li = s.split(' / ', 1)
+                ltmp = i['time']
+                tmp = li[1]
+                re.append({'time': i['time'], 'data': li[0]})
+            else:
+                re.append(i.copy())
+        if tmp is not None:
+            if dur is not None:
+                re.append({'time': max(round(dur, 2), round(ltmp + 0.01, 2)),
+                           'data': tmp})
+        self._l = re
+
     def parse(self, fn: str):
         li = []
         me = []
@@ -119,13 +155,14 @@ class Cml:
         self.verbose = False
         self.duration = None
         self.dir = None
+        self.offset = False
         if len(arg) == 0:
             self.print_help()
             exit(0)
         try:
             r = getopt(arg, '-hVvo:f:t:d:',
                        ['help', 'version', 'verbose', 'output=', 'file=',
-                        'duration=', 'dir='])
+                        'duration=', 'dir=', 'offset'])
             for i in r[0]:
                 if i[0] == '-h' or i[0] == '--help':
                     self.print_help()
@@ -143,6 +180,8 @@ class Cml:
                     self.duration = prase_duration(i[1])
                 elif i[0] == '-d' or i[0] == '--dir':
                     self.dir = i[1]
+                elif i[0] == '--offset':
+                    self.offset = True
             if len(r[1]) == 0:
                 raise GetoptError('Input lyric file is needed.')
             if len(r[1]) > 1:
@@ -164,7 +203,9 @@ Options:
     -f, --file <path>       Specify music file, will read duration and other
                             information from file. (rssbotlib is needed.)
     -t, --duration <time>   Specify the duration of music.
-    -d, --dir <path>        Specify the output directory.''')
+    -d, --dir <path>        Specify the output directory.
+        --offset            Remove offset tag in lryic file and apply offset
+                            for lyric''')
 
     def print_version(self):
         print('convert_lrc.py v1.0.0.0')
@@ -214,28 +255,9 @@ def main() -> int:
     lrc.parse(cml.input)
     if not lrc._has_dur:
         raise ValueError("This lyric file don't have timestamp.")
-    lrc._l.sort(key=lambda d: d['time'])
-    re = []
-    ltmp = 0
-    tmp = None
-    for i in lrc._l:
-        if tmp is not None:
-            re.append({'time': max(ltmp, round(i['time'] - 0.01, 2)),
-                       'data': tmp})
-            tmp = None
-        s: str = i['data']
-        if s.find(' / ') > 0:
-            li = s.split(' / ', 1)
-            ltmp = i['time']
-            tmp = li[1]
-            re.append({'time': i['time'], 'data': li[0]})
-        else:
-            re.append(i.copy())
-    if tmp is not None:
-        if dur is not None:
-            re.append({'time': max(round(dur, 2), round(ltmp + 0.01, 2)),
-                       'data': tmp})
-    lrc._l = re
+    lrc.convert_translate_type(dur)
+    if cml.offset:
+        lrc.apply_offset()
     lrc.save(output)
 
 
