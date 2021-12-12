@@ -91,11 +91,13 @@ p.add_argument('chat_id', nargs='?', type=int, help="Specify the chat's ID.")
 p.add_argument('-n', '--chat-name', help="Specify chat's name. Will used if chat_id is not sepcified.", metavar='NAME', dest='chat_name')  # noqa: E501
 p.add_argument('-s', '--start-time', type=tparse, metavar='TIME', help="The messages which are sended before this time will not be deleted.", dest='start_time')  # noqa: E501
 p.add_argument('-e', '--end-time', type=tparse, metavar='TIME', help="The messages which are sended after this time will not be deleted.", dest="end_time")  # noqa: E501
+p.add_argument('-v', '--verbose', action='store_true', help="Enable verbose logging.", dest="verbose")  # noqa: E501
+p.add_argument('--max-cache', metavar='COUNT', type=int, help='Specify the max count of cache messages. At least 100.', dest="max_cache")  # noqa: E501
 arg = p.parse_intermixed_args()
 if arg.chat_id is None and arg.chat_name is None:
     raise ValueError('chat_id or chat_name is needed.')
 try:
-    with TdLib() as lib:
+    with TdLib(arg.verbose, arg.max_cache) as lib:
         re = asyncio.run(main(lib, arg))
     sys.exit(re)
 except Exception:

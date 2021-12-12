@@ -149,10 +149,16 @@ class TdLibJSONEncoder(JSONEncoder):
 
 
 class TdLib:
-    def __init__(self) -> None:
+    def __init__(self, verbose: bool = False, maxCache: int = None) -> None:
         self._initalized = False
         self._destoried = False
         self._db_initalized = False
+        self._v = verbose
+        self._maxCache = 1000
+        if maxCache is not None:
+            if maxCache < 100:
+                raise ValueError('At least cache 100 messages.')
+            self._maxCache = maxCache
         self._e = 0
         self._re = {}
         self._rel = []
@@ -181,6 +187,10 @@ class TdLib:
         await self._thread.killed()
         _td_json_client_destroy(self._client_id)
         self._destoried = True
+        if self._v:
+            le1 = len(self._re)
+            le2 = len(self._rel)
+            print(f"There are {le1 + le2} ({le1} + {le2}) messages in cache.")
         del self._re
         del self._rel
 
@@ -201,9 +211,17 @@ class TdLib:
         if result:
             de = TdLibJSONDecoder()
             re = de.decode(result.decode())
+            if self._v:
+                if '@type' in re:
+                    print(f'Get message type: {re["@type"]}')
             if '@extra' in re:
                 self._re[re['@extra']] = re
             else:
+                while len(self._rel) >= self._maxCache:
+                    m = self._rel.pop(0)
+                    if self._v:
+                        t = m['@type'] if '@type' in m else 'Unknown'
+                        print(f'Discard a message in cache. Message type: {t}')
                 self._rel.append(re)
 
     async def addProxy(self, server, port, enable, type):
