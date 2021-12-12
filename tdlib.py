@@ -12,7 +12,7 @@ from traceback import print_exc
 from typing import List
 
 
-tdjson_path = find_library('tdjson') or 'tdjson.dll'
+tdjson_path = find_library('tdjson')
 if tdjson_path is None:
     print("Can't find 'tdjson' library")
     sys.exit(-1)

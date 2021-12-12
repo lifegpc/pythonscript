@@ -1,6 +1,7 @@
 from getopt import gnu_getopt as getopt, GetoptError
+from math import floor
 from os.path import basename, dirname, join, splitext
-from re import compile, search
+from re import compile, Match, search
 from sys import argv, exit
 from typing import List, Optional
 try:
@@ -13,12 +14,10 @@ except ImportError:
 RSSBOTLIB_NOTFOUND = '''rssbotlib not found.
 The source code is available at https://github.com/lifegpc/ffmpeg-study/tree/master/rssbotlib'''  # noqa: E501
 DUR_REG = compile(r'^(?P<sign>[\+-])?(((?P<h>\d+):)?((?P<min>\d+):))?(?P<sec>\d+)(\.(?P<ms>\d+))?$')  # noqa: E501
+LRCDUR_REG = compile(r'\[(((?P<h>\d+):)?((?P<min>\d+):))?(?P<sec>\d+)(\.(?P<ms>\d+))?\]')  # noqa: E501
 
 
-def prase_duration(s: str) -> float:
-    r = search(DUR_REG, s)
-    if r is None:
-        raise ValueError(f'Can not parse duration "{s}"')
+def convert_dur(r: Match) -> float:
     rd = r.groupdict()
     t = int(rd['sec'])
     if rd['ms']:
@@ -27,9 +26,16 @@ def prase_duration(s: str) -> float:
         t += int(rd['min']) * 60
     if rd['h']:
         t += int(rd['h']) * 3600
-    if rd['sign'] == '-':
+    if 'sign' in rd and rd['sign'] == '-':
         t = -t
     return t
+
+
+def prase_duration(s: str) -> float:
+    r = search(DUR_REG, s)
+    if r is None:
+        raise ValueError(f'Can not parse duration "{s}"')
+    return convert_dur(r)
 
 
 def generate_good_filename(meta: AVDict) -> Optional[str]:
@@ -38,6 +44,71 @@ def generate_good_filename(meta: AVDict) -> Optional[str]:
         return f"{m['artist']} - {m['title']}.lrc"
     elif 'title' in m:
         return f"{m['title']}.lrc"
+
+
+class Lyric:
+    def __init__(self) -> None:
+        self._l = []
+        self._meta = []
+        self._bom = False
+        self._has_dur = True
+
+    def parse(self, fn: str):
+        li = []
+        me = []
+        with open(fn, 'r', encoding='UTF-8') as f:
+            t = f.read(1)
+            if t == '\ufeff':
+                self._bom = True
+            else:
+                f.seek(0, 0)
+            ll = f.readlines(1)
+            while len(ll) > 0:
+                for i in ll:
+                    i = i.rstrip('\n')
+                    if self._has_dur:
+                        tre = LRCDUR_REG.finditer(i)
+                        re: List[Match] = []
+                        for tmp in tre:
+                            re.append(tmp)
+                        if len(re) == 0:
+                            if i.startswith('[') and i.endswith(']'):
+                                me.append(i[1:-1])
+                            else:
+                                if len(li) == 0:
+                                    self._has_dur = False
+                                    li.append(i)
+                                else:
+                                    print(f'Ignored "{i}"')
+                        else:
+                            d = i[re[-1].end():]
+                            for r in re:
+                                li.append({'time': round(convert_dur(r), 2),
+                                           'data': d})
+                    else:
+                        if i.startswith('[') and i.endswith(']'):
+                            me.append(i[1:-1])
+                        else:
+                            li.append(i)
+                ll = f.readlines(1)
+        self._l = li
+        self._meta = me
+
+    def save(self, fn: str):
+        with open(fn, 'w', encoding='UTF-8') as f:
+            if self._bom:
+                f.write('\ufeff')
+            for m in self._meta:
+                f.write(f"[{m}]\n")
+            for i in self._l:
+                if isinstance(i, str):
+                    f.write(f"{i}\n")
+                else:
+                    t = round(i['time'] * 100)
+                    m = floor(t / 6000)
+                    s = floor((t % 6000) / 100)
+                    ms = t % 100
+                    f.write(f"[{m:02}:{s:02}.{ms:02}]{i['data']}\n")
 
 
 class Cml:
@@ -136,7 +207,35 @@ def main() -> int:
             print(f'Get file name from input file: {output}')
     if cml.dir is not None:
         output = join(cml.dir, basename(output))
-        print(f'Replace output directory: {output}')
+        if cml.verbose:
+            print(f'Replace output directory: {output}')
+    lrc = Lyric()
+    lrc.parse(cml.input)
+    if not lrc._has_dur:
+        raise ValueError("This lyric file don't have timestamp.")
+    lrc._l.sort(key=lambda d: d['time'])
+    re = []
+    ltmp = 0
+    tmp = None
+    for i in lrc._l:
+        if tmp is not None:
+            re.append({'time': max(ltmp, round(i['time'] - 0.01, 2)),
+                       'data': tmp})
+            tmp = None
+        s: str = i['data']
+        if s.find(' / ') > 0:
+            li = s.split(' / ', 1)
+            ltmp = i['time']
+            tmp = li[1]
+            re.append({'time': i['time'], 'data': li[0]})
+        else:
+            re.append(i.copy())
+    if tmp is not None:
+        if dur is not None:
+            re.append({'time': max(round(dur, 2), round(ltmp + 0.01, 2)),
+                       'data': tmp})
+    lrc._l = re
+    lrc.save(output)
 
 
 if __name__ == "__main__":
