@@ -125,12 +125,37 @@ class ChatType(Enum):
         raise ValueError(f'Unknown value: {value}')
 
 
+class TextParseMode(Enum):
+    HTML = 0
+    MarkDown = 1
+
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self):
+        if self._value_ == 0:
+            return {"@type": "textParseModeHTML"}
+        elif self._value_ == 1:
+            return {"@type": "textParseModeMarkdown"}
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if isinstance(value, dict):
+            if value['@type'] == 'textParseModeHTML':
+                return cls(0)
+            elif value['@type'] == 'textParseModeMarkdown':
+                return cls(1)
+        raise ValueError(f'Unknown value: {value}')
+
+
 def json_object_hook(value):
     try:
         if isinstance(value, dict):
             if '@type' in value:
                 if value['@type'].startswith('chatType'):
                     return ChatType(value)
+                elif value['@type'].startswith('textParseMode'):
+                    return TextParseMode(value)
     except Exception:
         print_exc()
         return value
@@ -144,7 +169,7 @@ class TdLibJSONDecoder(JSONDecoder):
 
 class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, ChatType):
+        if isinstance(o, (ChatType, TextParseMode)):
             return dict(o)
         elif isinstance(o, bytes):
             return b64encode(o).decode()
@@ -326,10 +351,18 @@ class TdLib:
             return False
 
     async def editMessageText(self, chat_id: int, message_id: int, text: str,
-                              entities=None,
+                              parse_mode: TextParseMode = None, entities=None,
                               disable_web_page_preview: bool = False,
                               clear_draft: bool = False):
-        if entities is None:
+        if parse_mode is not None and entities is not None:
+            raise ValueError('Bot parse_mode and entities are not supported.')
+        if parse_mode is not None:
+            mes = await self.parseTextEntities(text, parse_mode)
+            if mes is None:
+                return None
+            entities = mes['entities']
+            text = mes['text']
+        elif entities is None:
             entities = await self.getTextEntities(text)
             if entities is None:
                 return None
@@ -452,6 +485,25 @@ class TdLib:
             else:
                 raise ValueError("Unknown authorization_state", state)
 
+    async def parseMarkdown(self, text: str):
+        re = await self._send({"@type": "parseMarkdown", "text": text})
+        if re['@type'] == 'formattedText':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
+    async def parseTextEntities(self, text: str, parse_mode: TextParseMode):
+        re = await self._send({"@type": "parseTextEntities", "text": text,
+                               "parse_mode": parse_mode})
+        if re['@type'] == 'formattedText':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def receive(self, type: str = None):
         while True:
             if len(self._rel) > 0:
@@ -474,7 +526,7 @@ class TdLib:
         if query is not None:
             d['query'] = query
         if sender_chat_id is not None and sender_user_id is not None:
-            raise ValueError('Both chat and user is supported.')
+            raise ValueError('Both chat and user is not supported.')
         if sender_chat_id is not None:
             d['sender_id'] = {'@type': "messageSenderChat",
                               "chat_id": sender_chat_id}
