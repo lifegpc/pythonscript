@@ -77,52 +77,88 @@ class UpdateThread(Thread):
                 print_exc()
 
 
-class ChatType(Enum):
-    BasicGroup = 0
-    Private = 1
-    Secret = 2
-    SuperGroup = 3
-
+class ChatType:
     def __iter__(self):
         return self.to_dict().items().__iter__()
 
-    def to_dict(self):
-        if self._value_ == 0:
-            return {"@type": "chatTypeBasicGroup",
-                    "basic_group_id": self.basic_group_id}
-        elif self._value_ == 1:
-            return {"@type": 'chatTypePrivate', 'user_id': self.user_id}
-        elif self._value_ == 2:
-            return {"@type": "chatTypeSecret",
-                    "secret_chat_id": self.secret_chat_id,
-                    "user_id": self.user_id}
-        elif self._value_ == 3:
-            return {"@type": "chatTypeSupergroup",
-                    "supergroup_id": self.supergroup_id,
-                    "is_channel": self.is_channel}
+    def to_dict(self) -> dict:
+        pass
 
-    @classmethod
-    def _missing_(cls, value: object):
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][8:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][8:]
+
+
+class ChatTypeBasicGroup(ChatType):
+    def __init__(self, value):
         if isinstance(value, dict):
             if value['@type'] == 'chatTypeBasicGroup':
-                re = cls(0)
-                re.basic_group_id = int(value['basic_group_id'])
-                return re
-            elif value['@type'] == 'chatTypePrivate':
-                re = cls(1)
-                re.user_id = int(value['user_id'])
-                return re
-            elif value['@type'] == 'chatTypeSecret':
-                re = cls(2)
-                re.secret_chat_id = int(value['secret_chat_id'])
-                re.user_id = int(value['user_id'])
-                return re
-            elif value['@type'] == 'chatTypeSupergroup':
-                re = cls(3)
-                re.supergroup_id = int(value['supergroup_id'])
-                re.is_channel = bool(value['is_channel'])
-                return re
+                self.basic_group_id = int(value['basic_group_id'])
+                return
         raise ValueError(f'Unknown value: {value}')
+
+    def to_dict(self):
+        return {"@type": "chatTypeBasicGroup",
+                "basic_group_id": self.basic_group_id}
+
+
+class ChatTypePrivate(ChatType):
+    def __init__(self, value):
+        if isinstance(value, dict):
+            if value['@type'] == 'chatTypePrivate':
+                self.user_id = int(value['user_id'])
+                return
+        raise ValueError(f'Unknown value: {value}')
+
+    def to_dict(self):
+        return {"@type": 'chatTypePrivate', 'user_id': self.user_id}
+
+
+class ChatTypeSecret(ChatType):
+    def __init__(self, value):
+        if isinstance(value, dict):
+            if value['@type'] == 'chatTypeSecret':
+                self.secret_chat_id = int(value['secret_chat_id'])
+                self.user_id = int(value['user_id'])
+                return
+        raise ValueError(f'Unknown value: {value}')
+
+    def to_dict(self):
+        return {"@type": "chatTypeSecret",
+                "secret_chat_id": self.secret_chat_id, "user_id": self.user_id}
+
+
+class ChatTypeSupergroup(ChatType):
+    def __init__(self, value):
+        if isinstance(value, dict):
+            if value['@type'] == 'chatTypeSupergroup':
+                self.supergroup_id = int(value['supergroup_id'])
+                self.is_channel = bool(value['is_channel'])
+                return
+        raise ValueError(f'Unknown value: {value}')
+
+    def to_dict(self):
+        return {"@type": "chatTypeSupergroup",
+                "supergroup_id": self.supergroup_id,
+                "is_channel": self.is_channel}
+
+
+def parse_chat_type(d):
+    if d['@type'].startswith('chatType'):
+        typ = 'C' + d['@type'][1:]
+        return globals()[typ](d)
 
 
 class TextParseMode(Enum):
@@ -153,7 +189,7 @@ def json_object_hook(value):
         if isinstance(value, dict):
             if '@type' in value:
                 if value['@type'].startswith('chatType'):
-                    return ChatType(value)
+                    return parse_chat_type(value)
                 elif value['@type'].startswith('textParseMode'):
                     return TextParseMode(value)
     except Exception:
@@ -214,6 +250,7 @@ class TdLib:
         self._thread.kill()
         await self._thread.killed()
         _td_json_client_destroy(self._client_id)
+        self._client_id = 0
         self._destoried = True
         if self._v:
             le1 = len(self._re)
@@ -421,6 +458,16 @@ class TdLib:
     async def getMe(self):
         re = await self._send({"@type": "getMe"})
         if re['@type'] == 'user':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
+    async def getMessage(self, chat_id: int, message_id: int):
+        re = await self._send({"@type": "getMessage", "chat_id": chat_id,
+                               "message_id": message_id})
+        if re['@type'] == 'message':
             return re
         else:
             if re['@type'] == 'error':
