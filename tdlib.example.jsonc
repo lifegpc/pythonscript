@@ -16,5 +16,10 @@
             "secret": "1234567890abcdef" // Optional. The proxy's secret in hexadecimal encoding. Supported if @type is proxyTypeMtproto.
         }
     },
-    "phone_number": "+11234567890" // Optional. User's phone number
+    "phone_number": "+11234567890", // Optional. User's phone number
+    "BotTdlibParameters": { // Optional. Same as TdlibParameters, but when creating a bot session, these parameters will override parameters in TdlibParameters
+        "database_directory": "/path/to/botdatabase"
+    },
+    "bot_encryption_key": "Base64 encoded's key",  // Optional. Encryption key to check or set up for bot. Need base64 encoded.
+    "bot_token": "12345678:235zoHFG" // Optional. Bot Token, which can be obtained with @BotFather
 }

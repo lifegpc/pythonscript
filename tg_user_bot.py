@@ -43,10 +43,17 @@ class MyArgParser(ArgumentParser):
 
 
 cnss = MyArgParser('-createnewstickerset', add_help=False, description="Create a new sticker set.", epilog="Note: Reply to a sticker message is needed.")  # noqa: E501
-cnss.add_argument('name', help="Sticker set name. Can contain only English letters, digits and underscores. 1-64 characters", type=validate_sticker_set_name)  # noqa: E501
+cnss.add_argument('name', help="Sticker set name. Can contain only English letters, digits and underscores. 1-64 characters. Must ended with _by_<botname> if create with a bot account", type=validate_sticker_set_name)  # noqa: E501
 cnss.add_argument('title', help="Sticker set title. 1-64 characters", type=validate_sticker_set_title)  # noqa: E501
 cnss.add_argument('source', help='Source of the sticker set', nargs='?', default='')  # noqa: E501
 cnss.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker', metavar='EMOJI', dest='emoji')  # noqa: E501
+cnss.add_argument('-u', '--user', help='Create with user account. Will have issue when try add sticker to set', action='store_true', dest='user')  # noqa: E501
+cnss.add_argument('-a', '--add-suffix', help='Add _by_<botname> automatically', action='store_true', dest='add_suffix')  # noqa: E501
+asts = MyArgParser('-addstickertoset', add_help=False, description="Add a sticker to a exist sticker set.", epilog="Note: Reply to a sticker message is needed.")  # noqa: E501
+asts.add_argument('name', help="Sticker set name. Must ended with _by_<botname>", type=validate_sticker_set_name, nargs='?')  # noqa: E501
+asts.add_argument('--id', help='Sticker set ID. Needed if name not specified.', type=int, metavar='ID', dest='id')  # noqa: E501
+asts.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker', metavar='EMOJI', dest='emoji')  # noqa: E501
+asts.add_argument('-a', '--add-suffix', help='Add _by_<botname> automatically', action='store_true', dest='add_suffix')  # noqa: E501
 
 
 def generateFileInfo(f: dict) -> str:
@@ -149,7 +156,7 @@ async def handle_message_info(lib: TdLib, mes):
         print('Can not edit message')
 
 
-async def handle_create_new_sticker_set(lib: TdLib, mes: dict,
+async def handle_create_new_sticker_set(lib: TdLib, robot: TdLib, mes: dict,
                                         argv: List[str]):
     if len(argv) == 1:
         re = await lib.editMessageText(
@@ -158,6 +165,11 @@ async def handle_create_new_sticker_set(lib: TdLib, mes: dict,
     else:
         try:
             r = cnss.parse_intermixed_args(argv[1:])
+            if r.add_suffix and not r.user:
+                un = await robot.getUsername()
+                if not r.name.endswith(f'_by_{un}'):
+                    r.name += f'_by_{un}'
+                validate_sticker_set_name(r.name)
             if mes['reply_to_message_id'] == 0:
                 raise ValueError('Reply a sticker message is needed.')
             nmes = await lib.getMessage(mes['reply_in_chat_id'],
@@ -175,7 +187,15 @@ async def handle_create_new_sticker_set(lib: TdLib, mes: dict,
             if fid == '':
                 raise ValueError("The target sticker's file id is empty.")
             st = [{"@type": "inputStickerStatic", "sticker": {"@type": "inputFileRemote", "id": fid}, "emojis": emoji}]  # noqa: E501
-            r = await lib.createNewStickerSet(r.title, r.name, st, source=r.source)  # noqa: E501
+            if not r.user and not robot._logined:
+                raise ValueError('A bot account is needed. Or add -u to create with user account.')  # noqa: E501
+            if r.user:
+                r = await lib.createNewStickerSet(r.title, r.name, st, source=r.source)  # noqa: E501
+            else:
+                uid = await lib.getUid()
+                if uid is None:
+                    raise ValueError('Can not get User ID.')
+                r = await robot.createNewStickerSet(r.title, r.name, st, source=r.source, user_id=uid)  # noqa: E501
             if r is None:
                 raise ValueError('Can not create new sticker set.')
             re = await lib.editMessageText(mes['chat_id'], mes['id'], f"Created successfully.\nSticker Set ID: {r['id']}\nhttps://t.me/addstickers/{r['name']}")  # noqa: E501
@@ -183,19 +203,84 @@ async def handle_create_new_sticker_set(lib: TdLib, mes: dict,
             if len(e.args) == 0:
                 re = await lib.editMessageText(mes['chat_id'], mes['id'], "Unknown error.")  # noqa: E501
             else:
-                re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{cnss.format_usage()}\n{cnss.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{cnss.format_usage()}{cnss.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
         except Exception:
             re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{format_exc()}\n```", TextParseMode.MarkDown)  # noqa: E501
     if re is None:
         print('Can not edit message')
 
 
-async def main(lib: TdLib):
+async def handle_add_sticker_to_set(lib: TdLib, robot: TdLib, mes: dict,
+                                    argv: List[str]):
+    if len(argv) == 1:
+        re = await lib.editMessageText(
+            mes['chat_id'], mes['id'], f"```\n{asts.format_help()}\n```",
+            TextParseMode.MarkDown)
+    else:
+        try:
+            if not robot._logined:
+                raise ValueError('bot_token is not set. This future need a bot. Please contact @BotFather to get a valid bot_token.')  # noqa: E501
+            r = asts.parse_intermixed_args(argv[1:])
+            if r.add_suffix and r.name:
+                un = await robot.getUsername()
+                if not r.name.endswith(f'_by_{un}'):
+                    r.name += f'_by_{un}'
+                validate_sticker_set_name(r.name)
+            if r.id is None and r.name is None:
+                raise ValueError('name or ID is needed.')
+            if mes['reply_to_message_id'] == 0:
+                raise ValueError('Reply a sticker message is needed.')
+            nmes = await lib.getMessage(mes['reply_in_chat_id'],
+                                        mes['reply_to_message_id'])
+            if nmes is None:
+                raise ValueError('Can not get the replied message.')
+            if nmes['content']['@type'] != 'messageSticker':
+                raise ValueError('Reply a sticker message is needed.')
+            width = nmes['content']['sticker']['width']
+            height = nmes['content']['sticker']['height']
+            if max(width, height) != 512:
+                raise ValueError('Invalid width or height')
+            fid = nmes['content']['sticker']['sticker']['remote']['id']
+            emoji = nmes['content']['sticker']['emoji'] if r.emoji is None else r.emoji  # noqa: E501
+            if fid == '':
+                raise ValueError("The target sticker's file id is empty.")
+            st = {"@type": "inputStickerStatic", "sticker": {"@type": "inputFileRemote", "id": fid}, "emojis": emoji}  # noqa: E501
+            if r.name is None:
+                si = await lib.getStickerSet(r.id)
+                if si is None:
+                    raise ValueError('Can not get sticker set from ID.')
+                r.name = si['name']
+            uid = await lib.getUid()
+            if uid is None:
+                raise ValueError('Can not get user ID.')
+            r = await robot.addStickerToSet(uid, r.name, st)
+            if r is None:
+                raise ValueError('Failed to add sticker to set')
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], "Added sticker to set successfully.")  # noqa: E501
+        except ValueError as e:
+            if len(e.args) == 0:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], "Unknown error.")  # noqa: E501
+            else:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{asts.format_usage()}{asts.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
+        except Exception:
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{format_exc()}\n```", TextParseMode.MarkDown)  # noqa: E501
+    if re is None:
+        print('Can not edit message.')
+
+
+async def main(lib: TdLib, robot: TdLib):
     with open('tdlib.json', 'r', encoding='UTF-8') as f:
         se = load(f)
     if not await lib.login(se['TdlibParameters'], se['encryption_key'],
                            se.get("proxy"), se.get("phone_number")):
         raise ValueError('Can not login')
+    if se.get("bot_token") is not None:
+        paras = se['TdlibParameters'].copy()
+        if se.get("BotTdlibParameters"):
+            paras.update(se["BotTdlibParameters"])
+        ek = se['bot_encryption_key'] if se.get("bot_encryption_key") else se['encryption_key']  # noqa: E501
+        if not await robot.login(paras, ek, se.get("proxy"), bot_token=se["bot_token"]):  # noqa: E501
+            raise ValueError('Can not login as bot')
     uid = await lib.getUid()
     while True:
         mes = await lib.receive('updateNewMessage')
@@ -212,7 +297,6 @@ async def main(lib: TdLib):
                 e = e.result()
                 if e is None:
                     print('Can not edit message.')
-                print(e)
             if mes['content']['text']['text'] == '-hello':
                 re = lib.editMessageText(mes['chat_id'], mes['id'],
                                          'Hello World!')
@@ -223,9 +307,13 @@ async def main(lib: TdLib):
             elif mes['content']['text']['text'].startswith('-'):
                 argv = commandLineToArgv(mes['content']['text']['text'])
                 if argv[0] in ['-createnewstickerset', '-cnss']:
-                    re = handle_create_new_sticker_set(lib, mes, argv)
+                    re = handle_create_new_sticker_set(lib, robot, mes, argv)
+                    asyncio.create_task(re)
+                elif argv[0] in ['-addstickertoset', '-asts']:
+                    re = handle_add_sticker_to_set(lib, robot, mes, argv)
                     asyncio.create_task(re)
 
 
-with TdLib(True) as lib:
-    asyncio.run(main(lib))
+with TdLib() as lib:
+    with TdLib() as robot:
+        asyncio.run(main(lib, robot))

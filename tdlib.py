@@ -298,6 +298,10 @@ def json_object_hook(value):
                     return parse_message_forward_orgin(value)
                 elif value['@type'] == 'message':
                     value['media_album_id'] = int(value['media_album_id'])
+                elif value['@type'] == 'getStickerSet':
+                    value['set_id'] = int(value['set_id'])
+                elif value['@type'] == 'stickerSet':
+                    value['id'] = int(value['id'])
     except Exception:
         print_exc()
         return value
@@ -320,6 +324,12 @@ class TdLibJSONEncoder(JSONEncoder):
                 if o['@type'] == 'message':
                     if 'media_album_id' in o:
                         o['media_album_id'] = str(o['media_album_id'])
+                elif o['@type'] == 'getStickerSet':
+                    if 'set_id' in o:
+                        o['set_id'] = str(o['set_id'])
+                elif o['@type'] == 'stickerSet':
+                    if 'id' in o:
+                        o['id'] = str(o['id'])
         return super().default(o)
 
 
@@ -328,6 +338,7 @@ class TdLib:
         self._initalized = False
         self._destoried = False
         self._db_initalized = False
+        self._logined = False
         self._v = verbose
         self._maxCache = 1000
         if maxCache is not None:
@@ -407,6 +418,16 @@ class TdLib:
                                  "port": port, "enable": enable,
                                  "type": type})
 
+    async def addStickerToSet(self, user_id: int, name: str, sticker):
+        re = await self._send({"@type": "addStickerToSet", "user_id": user_id,
+                               "name": name, "sticker": sticker})
+        if re['@type'] == 'stickerSet':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def checkAuthenticationCode(self, code: str):
         re = await self._send({"@type": "checkAuthenticationCode",
                                "code": code})
@@ -437,11 +458,23 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return False
 
+    async def checkAuthenticationBotToken(self, token: str):
+        re = await self._send({"@type": "checkAuthenticationBotToken",
+                               "token": token})
+        if re['@type'] == 'ok':
+            return True
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return False
+
     async def createNewStickerSet(self, title: str, name: str, stickers,
-                                  is_masks: bool = False, source: str = ''):
+                                  is_masks: bool = False, source: str = '',
+                                  user_id: int = 0):
         re = await self._send({"@type": "createNewStickerSet", "title": title,
                                "name": name, "stickers": stickers,
-                               "is_masks": is_masks, "source": source})
+                               "is_masks": is_masks, "source": source,
+                               "user_id": user_id})
         if re['@type'] == 'stickerSet':
             return re
         else:
@@ -602,6 +635,15 @@ class TdLib:
             await asyncio.sleep(0.1)
         return await self._send({"@type": "getProxies"})
 
+    async def getStickerSet(self, set_id: int):
+        re = await self._send({"@type": "getStickerSet", "set_id": set_id})
+        if re['@type'] == 'stickerSet':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def getTextEntities(self, text: str):
         re = await self._send({"@type": "getTextEntities", "text": text})
         if re['@type'] == 'textEntities':
@@ -616,7 +658,13 @@ class TdLib:
             self._uid = (await self.getMe())['id']
         return self._uid
 
-    async def login(self, parameters, encryption_key, proxy, phone_number):
+    async def getUsername(self) -> str:
+        if not hasattr(self, "_username"):
+            self._username = (await self.getMe())['username']
+        return self._username
+
+    async def login(self, parameters, encryption_key, proxy, phone_number=None,
+                    bot_token=None):
         while True:
             re = await self.receive('updateAuthorizationState')
             state = re['authorization_state']
@@ -638,6 +686,10 @@ class TdLib:
                     if not await self.setProxy(proxy['server'], proxy['port'], proxy['type']):  # noqa: E501
                         raise ValueError('Can not set proxy.')
             elif state['@type'] == 'authorizationStateWaitPhoneNumber':
+                if bot_token is not None:
+                    if not await self.checkAuthenticationBotToken(bot_token):
+                        raise ValueError('Invalid bot token')
+                    continue
                 if phone_number is None:
                     phone_number = input('Please input your phone number:')
                 if not await self.setAuthenticationPhoneNumber(phone_number):
@@ -651,6 +703,7 @@ class TdLib:
                 if not await self.checkAuthenticationPassword(paw):
                     raise ValueError('Incorrect passwrod.')
             elif state['@type'] == 'authorizationStateReady':
+                self._logined = True
                 return True
             else:
                 raise ValueError("Unknown authorization_state", state)
@@ -742,6 +795,15 @@ class TdLib:
     async def searchPublicChats(self, query: str):
         re = await self._send({"@type": "searchPublicChats", "query": query})
         if re['@type'] == 'chats':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
+    async def searchStickerSet(self, name: str):
+        re = await self._send({"@type": "searchStickerSet", "name": name})
+        if re['@type'] == 'stickerSet':
             return re
         else:
             if re['@type'] == 'error':
