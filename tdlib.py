@@ -159,6 +159,7 @@ def parse_chat_type(d):
     if d['@type'].startswith('chatType'):
         typ = 'C' + d['@type'][1:]
         return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
 
 
 class TextParseMode(Enum):
@@ -184,6 +185,107 @@ class TextParseMode(Enum):
         raise ValueError(f'Unknown value: {value}')
 
 
+class MessageForwardOrigin:
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self) -> dict:
+        pass
+
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][20:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][20:]
+
+
+class MessageForwardOriginChannel(MessageForwardOrigin):
+    def __init__(self, v):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageForwardOriginChannel':
+                self.chat_id = v['chat_id']
+                self.message_id = v['message_id']
+                self.author_signature = v['author_signature']
+                return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": 'messageForwardOriginChannel',
+                'chat_id': self.chat_id, 'message_id': self.message_id,
+                'author_signature': self.author_signature}
+
+
+class MessageForwardOriginChat(MessageForwardOrigin):
+    def __init__(self, v):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageForwardOriginChat':
+                self.sender_chat_id = v['sender_chat_id']
+                self.author_signature = v['author_signature']
+                return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageForwardOriginChat",
+                "sender_chat_id": self.sender_chat_id,
+                "author_signature": self.author_signature}
+
+
+class MessageForwardOriginHiddenUser(MessageForwardOrigin):
+    def __init__(self, v):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageForwardOriginHiddenUser':
+                self.sender_name = v['sender_name']
+                return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageForwardOriginHiddenUser",
+                "sender_name": self.sender_name}
+
+
+class MessageForwardOriginMessageImport(MessageForwardOrigin):
+    def __init__(self, v):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageForwardOriginMessageImport':
+                self.sender_name = v['sender_name']
+                return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageForwardOriginMessageImport",
+                "sender_name": self.sender_name}
+
+
+class MessageForwardOriginUser(MessageForwardOrigin):
+    def __init__(self, v):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageForwardOriginUser':
+                self.sender_user_id = v['sender_user_id']
+                return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageForwardOriginUser",
+                "sender_user_id": self.sender_user_id}
+
+
+def parse_message_forward_orgin(d):
+    if d['@type'].startswith('messageForwardOrigin'):
+        typ = 'M' + d['@type'][1:]
+        return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
+
+
 def json_object_hook(value):
     try:
         if isinstance(value, dict):
@@ -192,6 +294,10 @@ def json_object_hook(value):
                     return parse_chat_type(value)
                 elif value['@type'].startswith('textParseMode'):
                     return TextParseMode(value)
+                elif value['@type'].startswith('messageForwardOrigin'):
+                    return parse_message_forward_orgin(value)
+                elif value['@type'] == 'message':
+                    value['media_album_id'] = int(value['media_album_id'])
     except Exception:
         print_exc()
         return value
@@ -205,10 +311,15 @@ class TdLibJSONDecoder(JSONDecoder):
 
 class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, (ChatType, TextParseMode)):
+        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin)):
             return dict(o)
         elif isinstance(o, bytes):
             return b64encode(o).decode()
+        elif isinstance(o, dict):
+            if '@type' in o:
+                if o['@type'] == 'message':
+                    if 'media_album_id' in o:
+                        o['media_album_id'] = str(o['media_album_id'])
         return super().default(o)
 
 
@@ -259,7 +370,7 @@ class TdLib:
         del self._re
         del self._rel
 
-    async def _send(self, data):
+    async def _send(self, data) -> dict:
         extra = random()
         data['@extra'] = extra
         en = TdLibJSONEncoder(ensure_ascii=False)
@@ -325,6 +436,18 @@ class TdLib:
             if re['@type'] == 'error':
                 print(f"{re['code']} {re['message']}")
             return False
+
+    async def createNewStickerSet(self, title: str, name: str, stickers,
+                                  is_masks: bool = False, source: str = ''):
+        re = await self._send({"@type": "createNewStickerSet", "title": title,
+                               "name": name, "stickers": stickers,
+                               "is_masks": is_masks, "source": source})
+        if re['@type'] == 'stickerSet':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
 
     async def deleteAllMyMessageInChat(self, chat_id: int,
                                        start_time: int = None,
