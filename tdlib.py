@@ -9,7 +9,7 @@ from random import random
 import sys
 from threading import Thread
 from traceback import print_exc
-from typing import List
+from typing import List, Union
 
 
 tdjson_path = find_library('tdjson')
@@ -532,8 +532,11 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return False
 
-    async def deleteMessages(self, chat_id: int, message_ids: List[int],
+    async def deleteMessages(self, chat_id: int,
+                             message_ids: Union[List[int], int],
                              revoke: bool = True):
+        if isinstance(message_ids, int):
+            message_ids = [message_ids]
         re = await self._send({"@type": "deleteMessages", "chat_id": chat_id,
                                "message_ids": message_ids, "revoke": revoke})
         if re['@type'] == 'ok':

@@ -55,6 +55,7 @@ asts.add_argument('name', help="Sticker set name. Must ended with _by_<botname>"
 asts.add_argument('--id', help='Sticker set ID. Needed if name not specified.', type=int, metavar='ID', dest='id')  # noqa: E501
 asts.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker', metavar='EMOJI', dest='emoji')  # noqa: E501
 asts.add_argument('-a', '--add-suffix', help='Add _by_<botname> automatically', action='store_true', dest='add_suffix')  # noqa: E501
+asts.add_argument('-d', '--delete', help='Delete command message if executed successfully.', action='store_true', dest='delete')  # noqa: E501
 
 
 def generateFileInfo(f: dict) -> str:
@@ -270,10 +271,13 @@ async def handle_add_sticker_to_set(lib: TdLib, robot: TdLib, mes: dict,
             uid = await lib.getUid()
             if uid is None:
                 raise ValueError('Can not get user ID.')
-            r = await robot.addStickerToSet(uid, r.name, st)
-            if r is None:
+            re = await robot.addStickerToSet(uid, r.name, st)
+            if re is None:
                 raise ValueError('Failed to add sticker to set')
-            re = await lib.editMessageText(mes['chat_id'], mes['id'], "Added sticker to set successfully.")  # noqa: E501
+            if r.delete:
+                re = await lib.deleteMessages(mes['chat_id'], mes['id'])
+            else:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], "Added sticker to set successfully.")  # noqa: E501
         except ValueError as e:
             if len(e.args) == 0:
                 re = await lib.editMessageText(mes['chat_id'], mes['id'], "Unknown error.")  # noqa: E501
@@ -281,8 +285,8 @@ async def handle_add_sticker_to_set(lib: TdLib, robot: TdLib, mes: dict,
                 re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{asts.format_usage()}{asts.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
         except Exception:
             re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{format_exc()}\n```", TextParseMode.MarkDown)  # noqa: E501
-    if re is None:
-        print('Can not edit message.')
+    if re is None or re is False:
+        print('Can not edit/delete message.')
 
 
 async def main(lib: TdLib, robot: TdLib):
