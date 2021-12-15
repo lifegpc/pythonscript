@@ -46,9 +46,10 @@ cnss = MyArgParser('-createnewstickerset', add_help=False, description="Create a
 cnss.add_argument('name', help="Sticker set name. Can contain only English letters, digits and underscores. 1-64 characters. Must ended with _by_<botname> if create with a bot account", type=validate_sticker_set_name)  # noqa: E501
 cnss.add_argument('title', help="Sticker set title. 1-64 characters", type=validate_sticker_set_title)  # noqa: E501
 cnss.add_argument('source', help='Source of the sticker set', nargs='?', default='')  # noqa: E501
-cnss.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker', metavar='EMOJI', dest='emoji')  # noqa: E501
+cnss.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker. Can not combined with -A', metavar='EMOJI', dest='emoji')  # noqa: E501
 cnss.add_argument('-u', '--user', help='Create with user account. Will have issue when try add sticker to set', action='store_true', dest='user')  # noqa: E501
 cnss.add_argument('-a', '--add-suffix', help='Add _by_<botname> automatically', action='store_true', dest='add_suffix')  # noqa: E501
+cnss.add_argument('-A', '--all-stickers', help='Add all stickers in the sticker set which replied sticker belongs', action='store_true', dest="all_stickers")  # noqa: E501
 asts = MyArgParser('-addstickertoset', add_help=False, description="Add a sticker to a exist sticker set.", epilog="Note: Reply to a sticker message is needed.")  # noqa: E501
 asts.add_argument('name', help="Sticker set name. Must ended with _by_<botname>", type=validate_sticker_set_name, nargs='?')  # noqa: E501
 asts.add_argument('--id', help='Sticker set ID. Needed if name not specified.', type=int, metavar='ID', dest='id')  # noqa: E501
@@ -165,6 +166,8 @@ async def handle_create_new_sticker_set(lib: TdLib, robot: TdLib, mes: dict,
     else:
         try:
             r = cnss.parse_intermixed_args(argv[1:])
+            if r.emoji and r.all_stickers:
+                raise ValueError('-e is not supported when -A is specified.')
             if r.add_suffix and not r.user:
                 un = await robot.getUsername()
                 if not r.name.endswith(f'_by_{un}'):
@@ -178,15 +181,29 @@ async def handle_create_new_sticker_set(lib: TdLib, robot: TdLib, mes: dict,
                 raise ValueError('Can not get the replied message.')
             if nmes['content']['@type'] != 'messageSticker':
                 raise ValueError('Reply a sticker message is needed.')
-            width = nmes['content']['sticker']['width']
-            height = nmes['content']['sticker']['height']
-            if max(width, height) != 512:
-                raise ValueError('Invalid width or height')
-            fid = nmes['content']['sticker']['sticker']['remote']['id']
-            emoji = nmes['content']['sticker']['emoji'] if r.emoji is None else r.emoji  # noqa: E501
-            if fid == '':
-                raise ValueError("The target sticker's file id is empty.")
-            st = [{"@type": "inputStickerStatic", "sticker": {"@type": "inputFileRemote", "id": fid}, "emojis": emoji}]  # noqa: E501
+            if r.all_stickers:
+                set_id = nmes['content']['sticker']['set_id']
+                ss = await lib.getStickerSet(set_id)
+                if ss is None:
+                    raise ValueError('Can not get sticker set.')
+                st = []
+                for s in ss['stickers']:
+                    if max(s['width'], s['height']) != 512:
+                        raise ValueError('Invalid width or height')
+                    fid = s['sticker']['remote']['id']
+                    if fid == '':
+                        raise ValueError("Can not get sticker's file ID.")
+                    st.append({"@type": "inputStickerStatic", "sticker": {"@type": "inputFileRemote", "id": fid}, "emojis": s['emoji']})  # noqa: E501
+            else:
+                width = nmes['content']['sticker']['width']
+                height = nmes['content']['sticker']['height']
+                if max(width, height) != 512:
+                    raise ValueError('Invalid width or height')
+                fid = nmes['content']['sticker']['sticker']['remote']['id']
+                emoji = nmes['content']['sticker']['emoji'] if r.emoji is None else r.emoji  # noqa: E501
+                if fid == '':
+                    raise ValueError("The target sticker's file id is empty.")
+                st = [{"@type": "inputStickerStatic", "sticker": {"@type": "inputFileRemote", "id": fid}, "emojis": emoji}]  # noqa: E501
             if not r.user and not robot._logined:
                 raise ValueError('A bot account is needed. Or add -u to create with user account.')  # noqa: E501
             if r.user:
