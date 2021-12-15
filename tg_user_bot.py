@@ -13,7 +13,7 @@ from tdlib import (
     TdLib,
     TextParseMode,
 )
-from util import commandLineToArgv, timeToStr
+from util import commandLineToArgv, timeToStr, tparse
 
 
 USERNAME_REG = compile(r'^[0-9a-z_]+$', I)
@@ -56,6 +56,11 @@ asts.add_argument('--id', help='Sticker set ID. Needed if name not specified.', 
 asts.add_argument('-e', '--emoji', help='Emojis corresponding to the sticker', metavar='EMOJI', dest='emoji')  # noqa: E501
 asts.add_argument('-a', '--add-suffix', help='Add _by_<botname> automatically', action='store_true', dest='add_suffix')  # noqa: E501
 asts.add_argument('-d', '--delete', help='Delete command message if executed successfully.', action='store_true', dest='delete')  # noqa: E501
+damm = MyArgParser('-deleteallmymessages', add_help=False, description='Delete messages in one chat.')  # noqa: E501
+damm.add_argument('chat_id', type=int, nargs='?', help="Specify chat's ID.")
+damm.add_argument('-n', '--chat-name', help="Specify chat's name. Will used if chat_id is not sepcified.", metavar='NAME', dest='chat_name')  # noqa: E501
+damm.add_argument('-s', '--start-time', type=tparse, metavar='TIME', help="The messages which are sended before this time will not be deleted.", dest='start_time')  # noqa: E501
+damm.add_argument('-e', '--end-time', type=tparse, metavar='TIME', help="The messages which are sended after this time will not be deleted.", dest="end_time")  # noqa: E501
 
 
 def generateFileInfo(f: dict) -> str:
@@ -289,6 +294,59 @@ async def handle_add_sticker_to_set(lib: TdLib, robot: TdLib, mes: dict,
         print('Can not edit/delete message.')
 
 
+async def get_chat_id_from_name(lib: TdLib, name: str) -> int:
+    re = await lib.searchChatsOnServer(name)
+    if re is None:
+        raise ValueError('Can not search chats.')
+    le = len(re['chat_ids'])
+    if le == 0:
+        re = await lib.searchPublicChats(name)
+        if re is None:
+            raise ValueError('Can not search public chats.')
+        le = len(re['chat_ids'])
+        if le == 0:
+            raise ValueError('No chat found.')
+    if le == 1:
+        return re['chat_ids'][0]
+    else:
+        raise ValueError('Multipled chats returned, please speicfy a better name.')  # noqa: E501
+
+
+async def handle_delete_all_my_messages(lib: TdLib, mes: dict,
+                                        argv: List[str]):
+    if len(argv) == 1:
+        re = await lib.editMessageText(
+            mes['chat_id'], mes['id'], f"```\n{damm.format_help()}\n```",
+            TextParseMode.MarkDown)
+    else:
+        try:
+            r = damm.parse_intermixed_args(argv[1:])
+            if r.chat_id is None and r.chat_name is None:
+                r.chat_id = mes['chat_id']
+            cid = await get_chat_id_from_name(lib, r.chat_name) if r.chat_id is None else r.chat_id  # noqa: E501
+            text = 'all the time'
+            if r.start_time is not None and r.end_time is not None:
+                text = f"between `{timeToStr(r.start_time)}` and `{timeToStr(r.end_time)}`"  # noqa: E501
+            elif r.start_time is not None:
+                text = f"after `{timeToStr(r.start_time)}`"
+            elif r.end_time is not None:
+                text = f"before `{timeToStr(r.end_time)}`"
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], f"Started delete messages {text}.", TextParseMode.MarkDown)  # noqa: E501
+            re = await lib.deleteAllMyMessageInChat(cid, r.start_time, r.end_time, False, [mes['id']])  # noqa: E501
+            if re is None:
+                raise ValueError('Failed to delete.')
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], f"Deleted `{re}` messages {text}.", TextParseMode.MarkDown)  # noqa: E501
+        except ValueError as e:
+            if len(e.args) == 0:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], "Unknown error.")  # noqa: E501
+            else:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{damm.format_usage()}{damm.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
+        except Exception:
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{format_exc()}\n```", TextParseMode.MarkDown)  # noqa: E501
+    if re is None:
+        print('Can not edit message.')
+
+
 async def main(lib: TdLib, robot: TdLib):
     with open('tdlib.json', 'r', encoding='UTF-8') as f:
         se = load(f)
@@ -332,6 +390,9 @@ async def main(lib: TdLib, robot: TdLib):
                     asyncio.create_task(re)
                 elif argv[0] in ['-addstickertoset', '-asts']:
                     re = handle_add_sticker_to_set(lib, robot, mes, argv)
+                    asyncio.create_task(re)
+                elif argv[0] in ['-deleteallmymessages', '-damm']:
+                    re = handle_delete_all_my_messages(lib, mes, argv)
                     asyncio.create_task(re)
 
 

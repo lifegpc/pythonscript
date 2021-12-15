@@ -3,23 +3,8 @@ import asyncio
 from json import load
 import sys
 from traceback import print_exc
-try:
-    from dateutil.parser import parse
-    have_dateutil = True
-except ImportError:
-    print('Warning: python-dateutil not found. -s and -e only accept integer now.')  # noqa: E501
-    have_dateutil = False
 from tdlib import TdLib
-
-
-def tparse(s: str) -> int:
-    try:
-        return int(s)
-    except Exception:
-        if have_dateutil:
-            return round(parse(s).timestamp())
-        else:
-            raise ValueError()
+from util import tparse
 
 
 async def get_chat_id_from_name(lib: TdLib, name: str) -> int:
@@ -82,7 +67,7 @@ async def main(lib: TdLib, arg):
         return 0
     re = await lib.deleteAllMyMessageInChat(chat_id, arg.start_time, arg.end_time)  # noqa: E501
     print(re)
-    return 0 if re else -1
+    return 0 if re is not None else -1
 
 
 p = ArgumentParser(description='Delete all my messages in a chat.', add_help=True)  # noqa: E501

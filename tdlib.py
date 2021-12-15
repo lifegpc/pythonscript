@@ -484,16 +484,22 @@ class TdLib:
 
     async def deleteAllMyMessageInChat(self, chat_id: int,
                                        start_time: int = None,
-                                       end_time: int = None):
+                                       end_time: int = None,
+                                       verbose: bool = True,
+                                       excludes: List[int] = None):
         uid = await self.getUid()
         messages = await self.searchChatMessages(chat_id, sender_user_id=uid,
                                                  limit=100)
+        c = 0
         if messages is None:
-            return False
+            return None
         while len(messages['messages']) != 0:
             last_mid = messages['messages'][-1]['id']
             mids = []
             for m in messages['messages']:
+                if excludes is not None:
+                    if m['id'] in excludes:
+                        continue
                 need_deleted = False
                 if start_time is None and end_time is None:
                     need_deleted = True
@@ -507,16 +513,18 @@ class TdLib:
                     if m['date'] >= start_time and m['date'] <= end_time:
                         need_deleted = True
                 if need_deleted and m['can_be_deleted_for_all_users']:
-                    print(f"Add {m['id']} to delete list. ({m['date']})")
+                    if verbose:
+                        print(f"Add {m['id']} to delete list. ({m['date']})")
                     mids.append(m['id'])
             if not await self.deleteMessages(chat_id, mids):
                 raise ValueError('Can not delete messages.')
+            c += len(mids)
             messages = await self.searchChatMessages(
                 chat_id, sender_user_id=uid, from_message_id=last_mid,
                 limit=100)
             if messages is None:
-                return False
-        return True
+                return None
+        return c
 
     async def deleteChatHistory(self, chat_id: int,
                                 remove_from_chat_list: bool = False,
