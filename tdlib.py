@@ -867,6 +867,17 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return False
 
+    async def setStickerSetThumbnail(self, user_id: int, name: str, thumb):
+        re = await self._send({"@type": "setStickerSetThumbnail",
+                               "user_id": user_id, "name": name,
+                               "thumbnail": thumb})
+        if re['@type'] == 'stickerSet':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def setTdlibParameters(self, se):
         re = await self._send({"@type": "setTdlibParameters",
                                "parameters": se})
