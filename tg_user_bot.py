@@ -376,15 +376,18 @@ async def main(lib: TdLib, robot: TdLib):
                 e = e.result()
                 if e is None:
                     print('Can not edit message.')
-            if mes['content']['text']['text'] == '-hello':
+            text: str = mes['content']['text']['text']
+            text = text.lstrip("(NOFWD)")
+            text = text.lstrip("(NOQQ)")
+            if text == '-hello':
                 re = lib.editMessageText(mes['chat_id'], mes['id'],
                                          'Hello World!')
                 asyncio.create_task(re).add_done_callback(err)
-            elif mes['content']['text']['text'] in ['-msginfo', '-messageinfo']:  # noqa: E501
+            elif text in ['-msginfo', '-messageinfo']:  # noqa: E501
                 re = handle_message_info(lib, mes)
                 asyncio.create_task(re)
-            elif mes['content']['text']['text'].startswith('-'):
-                argv = commandLineToArgv(mes['content']['text']['text'])
+            elif text.startswith('-'):
+                argv = commandLineToArgv(text)
                 if argv[0] in ['-createnewstickerset', '-cnss']:
                     re = handle_create_new_sticker_set(lib, robot, mes, argv)
                     asyncio.create_task(re)

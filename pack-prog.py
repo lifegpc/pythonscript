@@ -40,7 +40,7 @@ def add_path_ext(path: str) -> str:
 
 
 def check_needed_prog():
-    if system(f'ldd --help > {devnull}'):
+    if system(f'ldd-rust --help > {devnull}'):
         return False
     if system(f'7z --help > {devnull}'):
         return False
@@ -48,7 +48,7 @@ def check_needed_prog():
 
 
 def check_prog(prog: str) -> List[str]:
-    r = Popen(f'ldd {prog}', stdout=PIPE, stderr=PIPE)
+    r = Popen(f'ldd-rust {prog}', stdout=PIPE, stderr=PIPE)
     out: bytes = r.communicate()[0]
     r.wait()
     out += r.communicate()[0]
