@@ -14,6 +14,7 @@ from tdlib import (
     TextParseMode,
 )
 from util import commandLineToArgv, timeToStr, tparse
+import requests
 
 
 USERNAME_REG = compile(r'^[0-9a-z_]+$', I)
@@ -61,6 +62,9 @@ damm.add_argument('chat_id', type=int, nargs='?', help="Specify chat's ID.")
 damm.add_argument('-n', '--chat-name', help="Specify chat's name. Will used if chat_id is not sepcified.", metavar='NAME', dest='chat_name')  # noqa: E501
 damm.add_argument('-s', '--start-time', type=tparse, metavar='TIME', help="The messages which are sended before this time will not be deleted.", dest='start_time')  # noqa: E501
 damm.add_argument('-e', '--end-time', type=tparse, metavar='TIME', help="The messages which are sended after this time will not be deleted.", dest="end_time")  # noqa: E501
+nbnhhsh = MyArgParser('-nbnhhsh', description='「能不能好好说话？」 拼音首字母缩写翻译工具', add_help=False)  # noqa: E501
+nbnhhsh.add_argument('缩写', help='缩写形式')
+nbnhhsh.add_argument('-t', '--timeout', help='设置超时时长，单位为秒（默认为 5 秒）', default=5, type=int, metavar='时长', dest='timeout')  # noqa: E501
 
 
 def generateFileInfo(f: dict) -> str:
@@ -347,6 +351,43 @@ async def handle_delete_all_my_messages(lib: TdLib, mes: dict,
         print('Can not edit message.')
 
 
+async def handle_nbnhhsh(lib: TdLib, mes: dict, argv: List[str]):
+    if len(argv) == 1:
+        re = await lib.editMessageText(
+            mes['chat_id'], mes['id'], f"```\n{nbnhhsh.format_help()}\n```",
+            TextParseMode.MarkDown)
+    else:
+        try:
+            opt = nbnhhsh.parse_intermixed_args(argv[1:])
+            re = requests.post("https://lab.magiconch.com/api/nbnhhsh/guess", {"text": opt.缩写}, timeout=opt.timeout)  # noqa: E501
+            if re.status_code >= 400:
+                raise ValueError(f'{re.status_code} {re.reason}\n{re.text}')
+            re = re.json()
+            tl = []
+            for kw in re:
+                text = f"`{kw['name']}`: "
+                if 'trans' in kw and isinstance(kw['trans'], list):
+                    text += ', '.join(kw['trans'])
+                else:
+                    text += '未找到结果'
+                tl.append(text)
+            text = '\n'.join(tl)
+            if text == '':
+                text = '没有结果'
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], text, TextParseMode.MarkDown)  # noqa: E501
+        except ValueError as e:
+            if len(e.args) == 0:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], "Unknown error.")  # noqa: E501
+            else:
+                re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{nbnhhsh.format_usage()}{nbnhhsh.prog}: error: {e.args[0] if len(e.args) == 1 else e.args}\n```", TextParseMode.MarkDown)  # noqa: E501
+        except requests.Timeout:
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], "查询超时")
+        except Exception:
+            re = await lib.editMessageText(mes['chat_id'], mes['id'], f"```\n{format_exc()}\n```", TextParseMode.MarkDown)  # noqa: E501
+    if re is None:
+        print('Can not edit message.')
+
+
 async def main(lib: TdLib, robot: TdLib):
     with open('tdlib.json', 'r', encoding='UTF-8') as f:
         se = load(f)
@@ -397,6 +438,8 @@ async def main(lib: TdLib, robot: TdLib):
                 elif argv[0] in ['-deleteallmymessages', '-damm']:
                     re = handle_delete_all_my_messages(lib, mes, argv)
                     asyncio.create_task(re)
+                elif argv[0] == '-nbnhhsh':
+                    asyncio.create_task(handle_nbnhhsh(lib, mes, argv))
 
 
 with TdLib() as lib:
