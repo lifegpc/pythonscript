@@ -641,6 +641,21 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return None
 
+    async def getMessageLink(self, chat_id: int, message_id: int,
+                             media_timestamp: int = 0, for_album: bool = False,
+                             for_comment: bool = False):
+        re = await self._send({"@type": "getMessageLink", "chat_id": chat_id,
+                               "message_id": message_id,
+                               "media_timestamp": media_timestamp,
+                               "for_album": for_album,
+                               "for_comment": for_comment})
+        if re['@type'] == 'messageLink':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def getProxies(self):
         while not self._db_initalized:
             await asyncio.sleep(0.1)
@@ -718,6 +733,32 @@ class TdLib:
                 return True
             else:
                 raise ValueError("Unknown authorization_state", state)
+
+    async def optimizeStorage(self, size: int = -1, ttl: int = -1,
+                              count: int = -1, immunity_delay: int = -1,
+                              file_types: list = None,
+                              chat_ids: List[int] = None,
+                              exclude_chat_ids: List[int] = None,
+                              return_deleted_file_statistics: bool = False,
+                              chat_limit: int = None):
+        d = {"@type": "optimizeStorage", "size": size, "ttl": ttl,
+             "count": count, "immunity_delay": immunity_delay,
+             "return_deleted_file_statistics": return_deleted_file_statistics}
+        if file_types is not None:
+            d['file_types'] = file_types
+        if chat_ids is not None:
+            d['chat_ids'] = chat_ids
+        if exclude_chat_ids is not None:
+            d['exclude_chat_ids'] = exclude_chat_ids
+        if chat_limit is not None:
+            d['chat_limit'] = chat_limit
+        re = await self._send(d)
+        if re['@type'] == 'storageStatistics':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
 
     async def parseMarkdown(self, text: str):
         re = await self._send({"@type": "parseMarkdown", "text": text})
@@ -832,6 +873,16 @@ class TdLib:
         re = await self._send({"@type": "setAuthenticationPhoneNumber",
                                "phone_number": str(phone_number),
                                "settings": sett})
+        if re['@type'] == 'ok':
+            return True
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return False
+
+    async def setDatabaseEncryptionKey(self,
+                                       new_encryption_key: Union[str, bytes]):
+        re = await self._send({"@type": "setDatabaseEncryptionKey", "new_encryption_key": new_encryption_key})  # noqa: E501
         if re['@type'] == 'ok':
             return True
         else:
