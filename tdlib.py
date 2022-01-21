@@ -862,6 +862,46 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return None
 
+    async def sendMessage(self, chat_id: int, content,
+                          message_thread_id: int = 0,
+                          reply_to_message_id: int = 0, options=None,
+                          reply_markup=None):
+        d = {"@type": "sendMessage", "chat_id": chat_id,
+             "input_message_content": content}
+        if message_thread_id != 0:
+            d['message_thread_id'] = message_thread_id
+        if reply_to_message_id != 0:
+            d['reply_to_message_id'] = reply_to_message_id
+        if options is not None:
+            d['options'] = options
+        if reply_markup is not None:
+            d['reply_markup'] = reply_markup
+        re = await self._send(d)
+        if re['@type'] == 'message':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
+    async def sendTextMessage(self, chat_id: int, text: str,
+                              mode: TextParseMode = None,
+                              disable_web_page_preview: bool = False,
+                              clear_draft: bool = False, **kw):
+        mes = {'@type': 'inputMessageText', 'clear_draft': clear_draft,
+               'disable_web_page_preview': disable_web_page_preview}
+        if mode is None:
+            t = {"@type": "formattedText", "text": text}
+            t['entities'] = (await self.getTextEntities(text))['entities']
+            if t['entities'] is None:
+                return None
+        else:
+            mes['text'] = await self.parseTextEntities(text, mode)
+            if mes['text'] is None:
+                return None
+        mes['text'] = t
+        return await self.sendMessage(chat_id, mes, **kw)
+
     async def setAuthenticationPhoneNumber(self, phone_number, settings=None):
         sett = {"@type": "phoneNumberAuthenticationSettings",
                 "allow_flash_call": False,
