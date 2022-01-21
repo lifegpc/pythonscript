@@ -2,7 +2,8 @@
     "TdlibParameters": { // Detailed information is availabled on https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1tdlib_parameters.html
         "api_id": 12345678, // Application identifier for Telegram API access, which can be obtained at https://my.telegram.org.
         "api_hash": "1234567890abcdef0123456789abcdef", // Application identifier hash for Telegram API access, which can be obtained at https://my.telegram.org.
-        "database_directory": "/path/to/database" // Optional. The path to the directory for the persistent database; if empty, the current working directory will be used.
+        "database_directory": "/path/to/database", // Optional. The path to the directory for the persistent database; if empty, the current working directory will be used.
+        "use_message_database": false // Optional. If set to true, the library will maintain a cache of chats and messages. Warn: TdLib do not provide a function to optimize database.
     },
     "encryption_key": "Base64 encoded's key",  // Encryption key to check or set up. Need base64 encoded.
     "proxy": { // Optional. Specify proxy

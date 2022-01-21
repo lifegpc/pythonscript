@@ -391,7 +391,7 @@ class TdLib:
             if extra in self._re:
                 re = self._re.pop(extra)
                 return re
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
 
     def _update(self):
         result: bytes = _td_json_client_receive(self._client_id, 1.0)
@@ -695,7 +695,7 @@ class TdLib:
             re = await self.receive('updateAuthorizationState')
             state = re['authorization_state']
             if state['@type'] == 'authorizationStateWaitTdlibParameters':
-                pa = {"use_message_database": True,
+                pa = {"use_message_database": False,
                       "system_language_code": "en",
                       "device_model": "Desktop",
                       "application_version": "1.0.0",
