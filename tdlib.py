@@ -892,9 +892,10 @@ class TdLib:
                'disable_web_page_preview': disable_web_page_preview}
         if mode is None:
             t = {"@type": "formattedText", "text": text}
-            t['entities'] = (await self.getTextEntities(text))['entities']
-            if t['entities'] is None:
+            e = await self.getTextEntities(text)
+            if e is None:
                 return None
+            t['entities'] = e['entities']
         else:
             mes['text'] = await self.parseTextEntities(text, mode)
             if mes['text'] is None:
