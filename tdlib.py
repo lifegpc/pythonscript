@@ -286,6 +286,245 @@ def parse_message_forward_orgin(d):
     raise ValueError(f'Unknown value: {d}')
 
 
+class ChatList:
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self) -> dict:
+        pass
+
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][8:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][8:]
+
+
+class ChatListArchive(ChatList):
+    def __init__(self, v=None):
+        if isinstance(v, dict):
+            if v['@type'] == 'chatListArchive':
+                return
+        elif v is None:
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "chatListArchive"}
+
+
+class ChatListFilter(ChatList):
+    def __init__(self, v=None, chat_filter_id: int = 0):
+        if isinstance(v, dict):
+            if v['@type'] == 'chatListFilter':
+                self.chat_filter_id = v['chat_filter_id']
+                return
+        elif v is None:
+            self.chat_filter_id = chat_filter_id
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "chatListFilter",
+                "chat_filter_id": self.chat_filter_id}
+
+
+class ChatListMain(ChatList):
+    def __init__(self, v=None):
+        if isinstance(v, dict):
+            if v['@type'] == 'chatListMain':
+                return
+        elif v is None:
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "chatListMain"}
+
+
+def parse_chat_list(d):
+    if d['@type'].startswith('chatList'):
+        typ = 'C' + d['@type'][1:]
+        return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
+
+
+class MessageSendingState:
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self) -> dict:
+        pass
+
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][19:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][19:]
+
+
+class MessageSendingStateFailed(MessageSendingState):
+    def __init__(self, v=None, error_code: int = 0, error_message: str = '',
+                 can_retry: bool = False, need_another_sender: bool = False,
+                 retry_after: float = 0):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageSendingStateFailed':
+                self.error_code = v['error_code']
+                self.error_message = v['error_message']
+                self.can_retry = v['can_retry']
+                self.need_another_sender = v['need_another_sender']
+                self.retry_after = v['retry_after']
+                return
+        elif v is None:
+            self.error_code = error_code
+            self.error_message = error_message
+            self.can_retry = can_retry
+            self.need_another_sender = need_another_sender
+            self.retry_after = retry_after
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageSendingStateFailed",
+                "error_code": self.error_code,
+                "error_message": self.error_message,
+                "can_retry": self.can_retry,
+                "need_another_sender": self.need_another_sender,
+                "retry_after": self.retry_after}
+
+
+class MessageSendingStatePending(MessageSendingState):
+    def __init__(self, v=None):
+        if isinstance(v, dict):
+            if v['@type'] == 'messageSendingStatePending':
+                return
+        elif v is None:
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "messageSendingStatePending"}
+
+
+def parse_message_sending_state(d):
+    if d['@type'].startswith('messageSendingState'):
+        typ = 'M' + d['@type'][1:]
+        return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
+
+
+class UpdateMessageSend:
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self) -> dict:
+        pass
+
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][17:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][17:]
+
+
+class UpdateMessageSendAcknowledged(UpdateMessageSend):
+    def __init__(self, v=None, chat_id: int = 0, message_id: int = 0):
+        if isinstance(v, dict):
+            if v['@type'] == 'updateMessageSendAcknowledged':
+                self.chat_id = v['chat_id']
+                self.message_id = v['message_id']
+                return
+        elif v is None:
+            self.chat_id = chat_id
+            self.message_id = message_id
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "updateMessageSendAcknowledged",
+                "chat_id": self.chat_id, "message_id": self.message_id}
+
+
+class UpdateMessageSendFailed(UpdateMessageSend):
+    def __init__(self, v=None, message=None, old_message_id: int = 0,
+                 error_code: int = 0, error_message: str = ''):
+        if isinstance(v, dict):
+            if v['@type'] == 'updateMessageSendFailed':
+                self.message = v['message']
+                self.old_message_id = v['old_message_id']
+                self.error_code = v['error_code']
+                self.error_message = v['error_message']
+                return
+        elif v is None:
+            self.message = message
+            self.old_message_id = old_message_id
+            self.error_code = error_code
+            self.error_message = error_message
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "updateMessageSendFailed", "message": self.message,
+                "old_message_id": self.old_message_id,
+                "error_code": self.error_code,
+                "error_message": self.error_message}
+
+
+class UpdateMessageSendSucceeded(UpdateMessageSend):
+    def __init__(self, v=None, message=None, old_message_id: int = 0):
+        if isinstance(v, dict):
+            if v['@type'] == 'updateMessageSendSucceeded':
+                self.message = v['message']
+                self.old_message_id = v['old_message_id']
+                return
+        elif v is None:
+            self.message = message
+            self.old_message_id = old_message_id
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self):
+        return {"@type": "updateMessageSendSucceeded", "message": self.message,
+                "old_message_id": self.old_message_id}
+
+
+def parse_update_message_send(d):
+    if d['@type'].startswith('updateMessageSend'):
+        typ = 'U' + d['@type'][1:]
+        return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
+
+
 def json_object_hook(value):
     try:
         if isinstance(value, dict):
@@ -296,6 +535,12 @@ def json_object_hook(value):
                     return TextParseMode(value)
                 elif value['@type'].startswith('messageForwardOrigin'):
                     return parse_message_forward_orgin(value)
+                elif value['@type'].startswith('chatList'):
+                    return parse_chat_list(value)
+                elif value['@type'].startswith('messageSendingState'):
+                    return parse_message_sending_state(value)
+                elif value['@type'].startswith('updateMessageSend'):
+                    return parse_update_message_send(value)
                 elif value['@type'] == 'message':
                     value['media_album_id'] = int(value['media_album_id'])
                 elif value['@type'] == 'getStickerSet':
@@ -315,7 +560,7 @@ class TdLibJSONDecoder(JSONDecoder):
 
 class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin)):
+        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin, ChatList, MessageSendingState)):  # noqa: E501
             return dict(o)
         elif isinstance(o, bytes):
             return b64encode(o).decode()
@@ -461,6 +706,15 @@ class TdLib:
     async def checkAuthenticationBotToken(self, token: str):
         re = await self._send({"@type": "checkAuthenticationBotToken",
                                "token": token})
+        if re['@type'] == 'ok':
+            return True
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return False
+
+    async def closeChat(self, chat_id: int):
+        re = await self._send({"@type": "closeChat", "chat_id": chat_id})
         if re['@type'] == 'ok':
             return True
         else:
@@ -656,6 +910,16 @@ class TdLib:
                 print(f"{re['code']} {re['message']}")
             return None
 
+    async def getMessageLocally(self, chat_id: int, message_id: int):
+        re = await self._send({"@type": "getMessageLocally",
+                               "chat_id": chat_id, "message_id": message_id})
+        if re['@type'] == 'message':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
+
     async def getProxies(self):
         while not self._db_initalized:
             await asyncio.sleep(0.1)
@@ -688,6 +952,27 @@ class TdLib:
         if not hasattr(self, "_username"):
             self._username = (await self.getMe())['username']
         return self._username
+
+    async def loadChat(self, chat_id: int) -> bool:
+        c = await self.getChat(chat_id)
+        while c is None:
+            r = await self.loadChats(ChatListMain())
+            if not r:
+                r = await self.loadChats(ChatListArchive())
+                if not r:
+                    return False
+            c = await self.getChat(chat_id)
+        return True
+
+    async def loadChats(self, chat_list: ChatList, limit: int = 10):
+        re = await self._send({"@type": "loadChats", "chat_list": chat_list,
+                               "limit": limit})
+        if re['@type'] == 'ok':
+            return True
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return False
 
     async def login(self, parameters, encryption_key, proxy, phone_number=None,
                     bot_token=None):
@@ -733,6 +1018,15 @@ class TdLib:
                 return True
             else:
                 raise ValueError("Unknown authorization_state", state)
+
+    async def openChat(self, chat_id: int):
+        re = await self._send({"@type": "openChat", "chat_id": chat_id})
+        if re['@type'] == 'ok':
+            return True
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return False
 
     async def optimizeStorage(self, size: int = -1, ttl: int = -1,
                               count: int = -1, immunity_delay: int = -1,
@@ -786,10 +1080,36 @@ class TdLib:
                     return self._rel.pop(0)
                 else:
                     for i in self._rel:
+                        if not isinstance(i, dict):
+                            continue
                         if '@type' in i and i['@type'] == type:
                             self._rel.remove(i)
                             return i
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
+
+    async def receive_update_message_send(self, temp_message_id: int,
+                                          check_interval: float = 0.1):
+        while True:
+            if len(self._rel) > 0:
+                for i in self._rel:
+                    if isinstance(i, UpdateMessageSend):
+                        if isinstance(i, UpdateMessageSendAcknowledged):
+                            if i.message_id == temp_message_id:
+                                return i
+                        else:
+                            if i.old_message_id == temp_message_id:
+                                return i
+            await asyncio.sleep(check_interval)
+
+    async def resendMessages(self, chat_id: int, message_ids: List[int]):
+        re = await self._send({"@type": "resendMessages", "chat_id": chat_id,
+                               "message_ids": message_ids})
+        if re['@type'] == 'messages':
+            return re
+        else:
+            if re['@type'] == 'error':
+                print(f"{re['code']} {re['message']}")
+            return None
 
     async def searchChatMessages(self, chat_id: int, query: str = None,
                                  sender_chat_id: int = None,
@@ -865,7 +1185,8 @@ class TdLib:
     async def sendMessage(self, chat_id: int, content,
                           message_thread_id: int = 0,
                           reply_to_message_id: int = 0, options=None,
-                          reply_markup=None):
+                          reply_markup=None, return_err_obj: bool = False,
+                          wait_message_send: bool = True, **kw):
         d = {"@type": "sendMessage", "chat_id": chat_id,
              "input_message_content": content}
         if message_thread_id != 0:
@@ -878,10 +1199,14 @@ class TdLib:
             d['reply_markup'] = reply_markup
         re = await self._send(d)
         if re['@type'] == 'message':
+            if wait_message_send:
+                return await self.waitMessage(re, **kw)
             return re
         else:
             if re['@type'] == 'error':
                 print(f"{re['code']} {re['message']}")
+                if return_err_obj:
+                    return re
             return None
 
     async def sendTextMessage(self, chat_id: int, text: str,
@@ -979,3 +1304,38 @@ class TdLib:
             if re['@type'] == 'error':
                 print(f"{re['code']} {re['message']}")
             return False
+
+    async def waitMessage(self, mes, max_retry: int = 3,
+                          check_interval: float = 0.1,
+                          min_retry_interval: float = 1,
+                          retry_count: int = 0):
+        if 'sending_state' not in mes or mes['sending_state'] is None:
+            return mes
+        if isinstance(mes['sending_state'], MessageSendingStatePending):
+            re = await self.receive_update_message_send(mes['id'], check_interval)  # noqa: E501
+            while isinstance(re, UpdateMessageSendAcknowledged):
+                re = await self.receive_update_message_send(mes['id'], check_interval)  # noqa: E501
+            if isinstance(re, UpdateMessageSendSucceeded):
+                return re.message
+            elif isinstance(re, UpdateMessageSendFailed):
+                mes = re.message
+            else:
+                return
+        if isinstance(mes['sending_state'], MessageSendingStateFailed):
+            n: MessageSendingStateFailed = mes['sending_state']
+            if retry_count >= max_retry:
+                return
+            retry_count += 1
+            print(f"{n.error_code} {n.error_message}")
+            if not n.can_retry or n.need_another_sender:
+                return
+            t = max(min_retry_interval, n.retry_after)
+            print(f"Retry {retry_count} times in {t}s.")
+            await asyncio.sleep(t)
+            mes = await self.resendMessages(mes['chat_id'], [mes['id']])
+            if mes is None:
+                print('Failed to resend message.')
+                return
+            mes = mes['messages'][0]
+            return await self.waitMessage(mes, max_retry, check_interval, min_retry_interval, retry_count)  # noqa: E501
+        return
