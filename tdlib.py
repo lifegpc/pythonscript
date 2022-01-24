@@ -560,7 +560,7 @@ class TdLibJSONDecoder(JSONDecoder):
 
 class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin, ChatList, MessageSendingState)):  # noqa: E501
+        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin, ChatList, MessageSendingState, UpdateMessageSend)):  # noqa: E501
             return dict(o)
         elif isinstance(o, bytes):
             return b64encode(o).decode()

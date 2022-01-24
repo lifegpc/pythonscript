@@ -4,7 +4,7 @@ from html.parser import HTMLParser
 from typing import List, Tuple, Optional
 from js2py import eval_js
 from os import makedirs, remove
-from os.path import join, exists, relpath
+from os.path import join, exists, relpath, abspath
 from traceback import print_exc
 from json import load, dump
 from urllib.parse import urljoin, parse_qs, urlparse
@@ -12,7 +12,35 @@ from base64 import b64decode as _b64decode
 from re import compile
 from argparse import ArgumentParser, RawTextHelpFormatter
 from textwrap import wrap as _wrap
-from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
+from zipfile import ZIP_STORED, ZipFile
+from subprocess import Popen, DEVNULL
+
+
+def detect_7z() -> bool:
+    try:
+        pro = Popen(['7z', '-h'], stdout=DEVNULL)
+        if pro.wait() == 0:
+            return True
+        return False
+    except Exception:
+        print_exc()
+        return False
+
+
+def add_7z_archive(file: str, list_file: str, pwd: str, compress_level: int) -> bool:
+    try:
+        a = ['7z', 'a', '-mmt1']
+        if compress_level is not None:
+            a.append(f'-mx{compress_level}')
+        a += [abspath(file), f'@{abspath(list_file)}']
+        print(a)
+        pro = Popen(a, cwd=pwd)
+        if pro.wait() == 0:
+            return True
+        return False
+    except Exception:
+        print_exc()
+        return False
 
 
 def wrap(s: str, width: int = 56):
@@ -196,12 +224,14 @@ ses.cookies = cookies
 arg = ArgumentParser(description='Download from Google Play Books', add_help=True, formatter_class=RawTextHelpFormatter)
 arg.add_argument('id', help=wrap("Book's id or url. Id is recommend because url may not be detected."))
 arg.add_argument('-o', '--output', help=wrap('Specify the location of output file. By default it will output to current directory and use "<author> - <title>" as file name.'), metavar='FILE', dest='output')
-arg.add_argument('type', help="Specify output type. (Default: null)\nSupported value:\nnull: Only download segments and resources.\nCBZ: Package all images file as a comic book ZIP archive.", nargs='?', default='null', choices=['null', 'CBZ'], metavar='type')
+arg.add_argument('type', help=f"Specify output type. (Default: null)\nSupported value:\nnull: Only download segments and resources.\nCBZ: Package all images file as a comic book ZIP archive.\n{wrap('CB7: Package all images file as a comic book 7-ZIP archive.')}", nargs='?', default='null', choices=['null', 'CBZ', 'CB7'], metavar='type')
 arg.add_argument('-c', '--cookies', help=wrap('Specify the location of cookies file. File must be Netscape HTTP Cookie File. (Default: google.txt)'), default="google.txt", metavar='FILE', dest='cookies')
 arg.add_argument('-a', '--authuser', help=wrap('Specify the index of current user. Will be useful when multiply Google Account is logined in a same cookie file. Index is start at 0. (Default: 0)'), default=0, type=int, metavar='INDEX', dest='authuser')
 arg.add_argument('-d', '--cache-dir', help=wrap('Specify the cache directory. By default, it will be "<author> - <title>"'), metavar='DIR', dest='cache_dir')
+arg.add_argument('--7z-compress-level', help=wrap('The compress level when using 7-zip to archive file. (1 fastest 9 ultra)'), type=int, metavar='LEVEL', dest='7z_compress_level')
+arg.add_argument('--crtl', '--comic-right-to-left', action='store_true', help=wrap('When packaging images as a comic book archive, the sequence of pages will like this: p1, p3, p2, p5, p4 ... This will produce a good archive for Japanese commic. You may need Okular to open archive with facing pages (center first page) view mode.'), dest='crtl')
 args = arg.parse_intermixed_args()
-print(args)
+argsd = vars(args)
 try:
     re = ses.get(f"https://play.google.com/books?authuser={args.authuser}")
     if re.status_code >= 400:
@@ -291,13 +321,15 @@ try:
                 if 'mime_type' in res:
                     if res['mime_type'] == 'image':
                         res_ext = '.jpg'
+                        if res_name.endswith('.png'):
+                            res_ext = '.png'
                     elif res['mime_type'] == 'text/css':
                         res_ext = '.css'
                     elif res['mime_type'] == 'video':
                         res_ext = '.mp4'
                 if res_ext == '':
                     raise ValueError(f"Can not detect the resource's type：{res['mime_type']}")
-                res_file = join(filename, f"{res_name}{res_ext}")
+                res_file = join(filename, f"{res_name}{res_ext}" if not res_name.endswith(res_ext) else res_name)
                 if exists(res_file) and res['url'] in resources:
                     print(f'Skip downloading resource file：{res_file}')
                 else:
@@ -318,7 +350,7 @@ try:
                         except Exception:
                             print_exc()
                             print(f'Download failed. Retry the {_ + 1} times.')
-                    if res_ext == '.jpg':
+                    if res_ext in ['.jpg', '.png']:
                         with open(res_file, 'wb') as f:
                             f.write(re.content)
                     elif res_ext == '.css':
@@ -369,6 +401,34 @@ try:
         if 'resource' in segment:
             output = args.output if args.output else f'{authors} - {title}.cbz'
             z = ZipFile(output, 'w', ZIP_STORED, True)
+            tmp = None
+            picn = 1
+            picc = 1
+            for segment in meta[0]['segment']:
+                segment_info_file = join(filename, f"{segment['label']}.json")
+                with open(segment_info_file, 'r', encoding='UTF-8') as f:
+                    segment = load(f)
+                for res in segment['resource']:
+                    nres = resources[res['url']]
+                    if 'mime_type' in nres and nres['mime_type'] == 'image':
+                        if not args.crtl or picn % 2 == 1:
+                            print(f"Add {nres['file']} to commic book archive.")
+                            z.write(nres['file'], f"{picc:03}.{relpath(nres['file'], filename)}")
+                            picc += 1
+                            if tmp is not None:
+                                print(f"Add {tmp[0]} to commic book archive.")
+                                z.write(tmp[0], f"{picc:03}.{tmp[1]}")
+                                picc += 1
+                                tmp = None
+                        else:
+                            tmp = (nres['file'], relpath(nres['file'], filename))
+                        picn += 1
+    elif args.type == "CB7":
+        if not detect_7z():
+            raise ValueError('Can not find 7z executable. Make sure 7z is in PATH environment variable or in current directory.')
+        if 'resource' in segment:
+            output = args.output if args.output else f'{authors} - {title}.cb7'
+            file_list = []
             for segment in meta[0]['segment']:
                 segment_info_file = join(filename, f"{segment['label']}.json")
                 with open(segment_info_file, 'r', encoding='UTF-8') as f:
@@ -377,7 +437,11 @@ try:
                     nres = resources[res['url']]
                     if 'mime_type' in nres and nres['mime_type'] == 'image':
                         print(f"Add {nres['file']} to commic book archive.")
-                        z.write(nres['file'], relpath(nres['file'], filename))
+                        file_list.append(relpath(nres['file'], filename))
+            file_list_loc = join('temp', f'{volume_id}_cb7_filelist.txt')
+            with open(file_list_loc, 'w', encoding='UTF-8') as f:
+                f.write('\n'.join(file_list))
+            add_7z_archive(output, file_list_loc, filename, argsd['7z_compress_level'])
 finally:
     cookies.save()
     try:
