@@ -1,10 +1,10 @@
 from requests import Session
 from http.cookiejar import MozillaCookieJar
 from html.parser import HTMLParser
-from typing import Any, Callable, Dict, List, Tuple, Optional
+from typing import Any, Callable, Dict, List, Tuple, Optional, Union
 from js2py import eval_js
 from os import makedirs, remove
-from os.path import join, exists, relpath, abspath
+from os.path import join, exists, relpath, abspath, basename, splitext
 from traceback import print_exc
 from json import load, dump, loads
 from urllib.parse import urljoin, parse_qs, urlparse
@@ -15,8 +15,9 @@ from textwrap import wrap as _wrap
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from subprocess import Popen, DEVNULL
 from xml.etree import ElementTree as ET
-from time import gmtime, strftime, strptime
+from time import gmtime, strftime, strptime, time
 from calendar import timegm
+from posixpath import join as posixjoin
 
 
 def get_iso8601_time(d: int) -> str:
@@ -29,12 +30,20 @@ def parse_time(s: str) -> int:
 
 DC_NS = 'http://purl.org/dc/elements/1.1/'
 OPF_NS = 'http://www.idpf.org/2007/opf'
+SVG_NS = 'http://www.w3.org/2000/svg'
+XLINK_NS = 'http://www.w3.org/1999/xlink'
+XHTML_NS = 'http://www.w3.org/1999/xhtml'
+SVG_TAGS = ['svg', '{%s}svg' % (SVG_NS)]
+SWITCH_TAGS = ['switch', '{%s}switch' % (OPF_NS)]
 ALLOW_DC_LIST = ['coverage', 'description', 'format', 'publisher', 'relation', 'rights', 'source', 'type']
+ALL_IMAGE_MIMETYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp']
+EXT_MIMETYPES = {'.jpeg': 'image/jpeg', '.jpg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp'}
 PREFIX_DICT = {'rendition': 'http://www.idpf.org/vocab/rendition/#',
                'ebpaj': 'http://www.ebpaj.jp/',
                'fixed-layout-jp': 'http://www.digital-comic.jp/',
                'kadokawa': 'http://www.access-company.com/2012/layout#',
-               'ibooks': 'http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/'}
+               'ibooks': 'http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/',
+               'dcterms': 'https://www.dublincore.org/specifications/dublin-core/dcmi-terms/'}
 js_dumps: Callable[[Any], str] = eval_js('function(a){return JSON.stringify(a);}')
 
 
@@ -123,6 +132,33 @@ class EPUBMeta:
         return e
 
 
+class ADEPageMap:
+    def __init__(self, p):
+        self.location = 'page_map.xml'
+        self.pages: List[Union[str, Tuple[str, str]]] = []
+        self.id = 'page_map'
+        self._p: EPUBPackage = p
+
+    def add_page(self, href: str, name: str = None):
+        if name is None:
+            self.pages.append(href)
+        else:
+            self.pages.append((name, href))
+
+    def dump(self):
+        map = ET.Element('page-map', {'xmlns': OPF_NS})
+        for i in self.pages:
+            d = {'href': i, 'name': ''} if isinstance(i, str) else {'href': i[1], 'name': i[0]}
+            if not self._p.manifest.have_href(d['href']):
+                raise ValueError(f"Can not find href {d['href']} in manifest.")
+            map.append(ET.Element('page', d))
+        return ET.tostring(map, 'UTF-8')
+
+    def save(self, f: ZipFile):
+        f.writestr(self.location, self.dump())
+        print(f'Added {self.location} to archive.')
+
+
 class EPUBMetadata:
     def __init__(self, p):
         self._p: EPUBPackage = p
@@ -199,6 +235,8 @@ class EPUBMetadata:
                 metadata.append(e)
         for i in self.metas:
             metadata.append(i.dump())
+        lmt = EPUBMeta('dcterms:modified', get_iso8601_time(time()))
+        metadata.append(lmt.dump())
         return metadata
 
     def get_unique_identifier(self) -> Optional[str]:
@@ -224,7 +262,7 @@ class EPUBMetadata:
 
     @property
     def prefix(self):
-        r = []
+        r = [f"dcterms: {PREFIX_DICT['dcterms']}"]
         for i in self.metas:
             if i.prefix_url:
                 if i.prefix_url not in r:
@@ -232,14 +270,188 @@ class EPUBMetadata:
         return ' '.join(r)
 
 
+class EPUBItem:
+    def __init__(self, href: str, id: str, media_type: str, file: str = None, properties: List[str] = None, fallback: str = None, media_overlay: str = None):
+        self.href = href
+        self.id = id
+        self.media_type = media_type
+        self.file = file
+        self.properties = properties
+        self.fallback = fallback
+        self.media_overlay = media_overlay
+        self.file = file
+
+    def dump(self) -> ET.Element:
+        e = ET.Element('item', {'href': self.href, 'id': self.id, 'media-type': self.media_type})
+        if self.properties:
+            e.attrib['properties'] = ' '.join(self.properties)
+        if self.fallback:
+            e.attrib['fallback'] = self.fallback
+        if self.media_overlay:
+            e.attrib['media-overlay'] = self.media_overlay
+        return e
+
+    def save(self, f: ZipFile):
+        if self.file:
+            f.write(self.file, self.href)
+            print(f'Added {self.file} to {self.href} in archive.')
+
+
+class EPUBManifest:
+    def __init__(self, p):
+        self._p: EPUBPackage = p
+        self.items: List[EPUBItem] = []
+
+    def add_item(self, href: str, id: str, media_type: str, file: str = None, properties: List[str] = None, fallback: str = None, media_overlay: str = None):
+        if id == 'nav' or (self._p.page_map and self._p.page_map.id == id):
+            raise ValueError(f'id {id} already used.')
+        for i in self.items:
+            if i.href == href:
+                raise ValueError(f'href {href} already used.')
+            elif i.id == id:
+                raise ValueError(f'id {id} already used.')
+        self.items.append(EPUBItem(href, id, media_type, file, properties, fallback, media_overlay))
+
+    def add_cover(self, href: str, id: str, media_type: str, file: str):
+        if self.have_cover_image:
+            raise ValueError('Only one cover image.')
+        if media_type not in ALL_IMAGE_MIMETYPES:
+            raise ValueError(f'Unsupported media type {media_type}')
+        self.add_item(href, id, media_type, file, ['cover-image'])
+
+    def dump(self):
+        items = self.items + [EPUBItem(self._p.page_map.location, self._p.page_map.id, 'application/oebps-page-map+xml')] if self._p.page_map else self.items
+        items.append(EPUBItem(self._p.nav.location, 'nav', 'application/xhtml+xml', properties=['nav']))
+        e = ET.Element('manifest')
+        for i in items:
+            e.append(i.dump())
+        return e
+
+    @property
+    def have_cover_image(self):
+        for i in self.items:
+            if i.properties and 'cover-image' in i.properties:
+                return True
+        return False
+
+    def have_href(self, href: str):
+        if '#' in href:
+            href = href[:href.rfind('#')]
+        for i in self.items:
+            if i.href == href:
+                return True
+        return False
+
+    def have_id(self, id: str):
+        for i in self.items:
+            if i.id == id:
+                return True
+        return False
+
+    def save(self, f: ZipFile):
+        for i in self.items:
+            i.save(f)
+
+
+class EPUBItemRef:
+    def __init__(self, idref: str, linear: str = None, properties: List[str] = None, id: str = None):
+        self.idref = idref
+        self.linear = linear
+        self.properties = properties
+        self.id = id
+
+    def dump(self):
+        e = ET.Element('itemref', {'idref': self.idref})
+        if self.linear:
+            e.attrib['linear'] = self.linear
+        if self.properties:
+            e.attrib['properties'] = ' '.join(self.properties)
+        if self.id:
+            e.attrib['id'] = self.id
+        return e
+
+
+class EPUBSpine:
+    def __init__(self, p):
+        self._p: EPUBPackage = p
+        self.refs: List[EPUBItemRef] = []
+        self.page_progression_direction = None
+
+    def add_ref(self, idref: str, linear: str = None, properties: List[str] = None, id: str = None):
+        self.refs.append(EPUBItemRef(idref, linear, properties, id))
+
+    def dump(self):
+        e = ET.Element('spine')
+        if self.page_progression_direction:
+            e.attrib['page-progression-direction'] = self.page_progression_direction
+        for ref in self.refs:
+            if not self._p.manifest.have_id(ref.idref):
+                raise ValueError(f"Can not find id {ref.idref} in manifest.")
+            e.append(ref.dump())
+        return e
+
+
+class EPUBNav:
+    def __init__(self, text: str, href: str = None):
+        self.text = text
+        self.href = href
+        self.childrens: List[EPUBNav] = []
+
+    def dump(self):
+        e = ET.Element('li')
+        a = ET.Element('a' if self.href else 'span', {'href': self.href} if self.href else {})
+        a.text = self.text
+        e.append(a)
+        if self.childrens:
+            ol = ET.Element('ol')
+            for i in self.childrens:
+                ol.append(i.dump())
+            e.append(ol)
+        return e
+
+
+class EPUBNavigation:
+    def __init__(self):
+        self.location = 'nav.xhtml'
+        self.head = None
+        self.navs: List[EPUBNav] = []
+
+    def dump(self):
+        e = ET.Element('nav', {'xmlns:epub': OPF_NS, 'epub:type': 'toc', 'id': 'toc'})
+        if len(self.navs) < 1:
+            raise InvalidEPUB('At least one nav element is needed.')
+        if self.head:
+            h = ET.Element('h1')
+            h.text = self.head
+            e.append(h)
+        ol = ET.Element('ol')
+        for i in self.navs:
+            ol.append(i.dump())
+        e.append(ol)
+        return ET.tostring(e, 'UTF-8')
+
+    def save(self, f: ZipFile):
+        f.writestr(self.location, self.dump())
+        print(f'Added {self.location} to archive.')
+
+
 class EPUBPackage:
     def __init__(self, location: str = 'package.opf'):
         self.location = location
         self.metadata = EPUBMetadata(self)
         self.language = ''
+        self.manifest = EPUBManifest(self)
+        self.spine = EPUBSpine(self)
+        self.page_map: Optional[ADEPageMap] = None
+        self.nav = EPUBNavigation()
 
     def add_identifier(self, value: str, id: str = None):
         self.metadata.add_identifier(value, id)
+
+    def add_page(self, href: str, name: str = None):
+        if self.page_map is None:
+            self.page_map = ADEPageMap(self)
+        self.page_map.add_page(href, name)
 
     def dump(self):
         ide = self.metadata.get_unique_identifier()
@@ -252,11 +464,17 @@ class EPUBPackage:
         if prefix:
             root.attrib['prefix'] = prefix
         root.append(self.metadata.dump())
+        root.append(self.manifest.dump())
+        root.append(self.spine.dump())
         return ET.tostring(root, 'UTF-8')
 
     def save(self, f: ZipFile):
         f.writestr(self.location, self.dump())
         print(f'Added {self.location} to archive.')
+        self.nav.save(f)
+        if self.page_map:
+            self.page_map.save(f)
+        self.manifest.save(f)
 
     @property
     def unique_identifier(self):
@@ -313,6 +531,9 @@ class EPUB:
         self.packages = self.container.packages
         self.package = self.packages[0]
         self.metadata = self.package.metadata
+        self.manifest = self.package.manifest
+        self.spine = self.package.spine
+        self.nav = self.package.nav
 
     def add_identifier(self, value: str, id: str = None):
         self.package.add_identifier(value, id)
@@ -325,6 +546,86 @@ class EPUB:
             f.writestr('mimetype', b'application/epub+zip', ZIP_STORED)
             print('Added mimetype to archive.')
             self.container.save(f)
+
+
+class XHTMLConvert:
+    def __init__(self, root: ET.Element):
+        self.root = root
+        self.have_svg = False
+        self.scripted = False
+        self.have_remote_resources = False
+        self.have_switch = False
+        self.head = self.root.find('head')
+        if self.head is None:
+            raise ValueError('Can not find head element.')
+        self.body = self.root.find('body')
+        if self.body is None:
+            raise ValueError('Can not find body element.')
+        self.head.append(ET.Element('meta', {'charset': 'UTF-8'}))
+        self.title = None
+
+    def add_css(self, href):
+        self.head.append(ET.Element('link', {'href': href, 'rel': 'stylesheet', 'type': 'text/css'}))
+
+    def convert(self, url_maps: Dict[str, str], allow_remote_resources: bool = False):
+        if self.root.find('script'):
+            self.scripted = True
+        for i in SVG_TAGS:
+            if self.root.find(i):
+                self.have_svg = True
+        for i in SWITCH_TAGS:
+            if self.root.find(i):
+                self.have_switch = True
+        for i in self.body.iter():
+            if i.tag == '{%s}image' % (SVG_NS):
+                for tag in ['href', '{%s}href' % (XLINK_NS)]:
+                    if tag in i.attrib:
+                        url = i.attrib[tag]
+                        re = urlparse(url)
+                        if re.scheme or re.hostname:
+                            if url in url_maps:
+                                i.attrib[tag] = url_maps[url]
+                            else:
+                                if allow_remote_resources:
+                                    self.have_remote_resources = True
+                                else:
+                                    raise ValueError(f'Unknown remote resource: {url}')
+            elif i.tag == 'img':
+                if 'src' in i.attrib:
+                    url = i.attrib['src']
+                    re = urlparse(url)
+                    if re.scheme or re.hostname:
+                        if url in url_maps:
+                            i.attrib['src'] = url_maps[url]
+                        else:
+                            if allow_remote_resources:
+                                self.have_remote_resources = True
+                            else:
+                                raise ValueError(f'Unknown remote resource: {url}')
+
+    @property
+    def properties(self) -> Optional[List[str]]:
+        r = []
+        if self.have_svg:
+            r.append('svg')
+        if self.have_switch:
+            r.append('switch')
+        if self.have_remote_resources:
+            r.append('remote-resources')
+        if self.scripted:
+            r.append('scripted')
+        return r if len(r) else None
+
+    def save(self, fn: str):
+        with open(fn, 'wb') as f:
+            f.write(ET.tostring(self.root, 'UTF-8'))
+        print(f'Writed XHMTL to {fn}.')
+
+    def set_title(self, title: str):
+        if self.title is None:
+            self.title = ET.Element('title')
+            self.head.append(self.title)
+        self.title.text = title
 
 
 def detect_7z() -> bool:
@@ -587,6 +888,13 @@ def get_genres(d: dict) -> Optional[str]:
     return None
 
 
+def find_page(d, pid):
+    for i in d:
+        if i['pid'] == pid:
+            return i
+    return None
+
+
 cookies = MozillaCookieJar('google.txt')
 cookies.load()
 ses = Session()
@@ -816,7 +1124,7 @@ try:
             with open(file_list_loc, 'w', encoding='UTF-8') as f:
                 f.write('\n'.join(file_list))
             add_7z_archive(output, file_list_loc, filename, argsd['7z_compress_level'])
-    else:
+    elif args.type == 'EPUB':
         output = args.output if args.output else f'{authors} - {title}.epub'
         webre = ses.get(f'https://play.google.com/store/books/details/?id={book_id}')
         if webre.status_code >= 400:
@@ -853,6 +1161,79 @@ try:
         e.metadata.add_data('publisher', publisher)
         for i in meta[0]['meta']:
             e.metadata.add_meta(i['property'], i['cdata'])
+        if meta[0]['is_right_to_left']:
+            e.spine.page_progression_direction = 'rtl'
+        for i in meta[0]['toc_entry']:
+            if i['depth'] != 0:
+                raise NotImplementedError('Non-zero depth toc.')
+            seg_meta = meta[0]['segment'][i['segment_index']]
+            label = seg_meta['label']
+            if not label.endswith('.xhtml'):
+                label += '.xhtml'
+            href = posixjoin("xhtml", label)
+            e.nav.navs.append(EPUBNav(i['label'], href))
+        cover_meta = meta[0]['segment'][0]
+        seg_file = join(filename, f"{cover_meta['label']}.json")
+        with open(seg_file, 'r', encoding='UTF-8') as f:
+            seg_info = load(f)
+        for res in seg_info['resource']:
+            if res['mime_type'] == 'image':
+                res_info = resources[res['url']]
+                href = posixjoin('image', basename(res_info['file']))
+                id = splitext(basename(res_info['file']))[0]
+                mimetype = EXT_MIMETYPES[splitext(res_info['file'])[1]]
+                e.manifest.add_cover(href, id, mimetype, res_info['file'])
+                break
+        ET.register_namespace('epub', OPF_NS)
+        ET.register_namespace('svg', SVG_NS)
+        ET.register_namespace('xlink', XLINK_NS)
+        for seg_meta in meta[0]['segment']:
+            seg_file = join(filename, f"{seg_meta['label']}.json")
+            with open(seg_file, 'r', encoding='UTF-8') as f:
+                seg_info = load(f)
+            if 'content' in seg_info:
+                if seg_info['content_encrypted'] and decrypter is not None:
+                    seg_info['content'] = decrypter.decrypt(b64decode(segment['content'])).decode()
+                    seg_info['content_encrypted'] = False
+                tree: ET.Element = ET.fromstring(f"<html xmlns:epub=\"{OPF_NS}\"><head></head><body>{seg_info['content']}</body></html>")
+                converter = XHTMLConvert(tree)
+                url_maps = {}
+                for i in seg_info['resource']:
+                    res = resources[i['url']]
+                    if i['mime_type'] == 'text/css':
+                        href = posixjoin('css', basename(res['file']))
+                        id = splitext(basename(res['file']))[0]
+                        if not e.manifest.have_href(href):
+                            e.manifest.add_item(href, id, 'text/css', res['file'])
+                        converter.add_css(posixjoin('..', href))
+                    elif i['mime_type'] in 'image':
+                        href = posixjoin('image', basename(res['file']))
+                        id = splitext(basename(res['file']))[0]
+                        mimetype = EXT_MIMETYPES[splitext(res['file'])[1]]
+                        if not e.manifest.have_href(href):
+                            e.manifest.add_item(href, id, mimetype, res['file'])
+                        url_maps[i['url']] = posixjoin('..', href)
+                converter.set_title(title)
+                print(url_maps)
+                converter.convert(url_maps)
+                for i in converter.root.iter():
+                    print(i, i.text, i.attrib)
+                label = seg_meta['label']
+                if not label.endswith('.xhtml'):
+                    label += '.xhtml'
+                href = posixjoin('xhtml', label)
+                path = join(filename, label)
+                converter.save(path)
+                e.manifest.add_item(href, seg_meta['label'], 'application/xhtml+xml', path, converter.properties)
+                e.spine.add_ref(seg_meta['label'], 'yes')
+                if 'page' in seg_info:
+                    for i in seg_info['page']:
+                        p = find_page(meta[0]['page'], i['pid'])
+                        if p is None:
+                            raise ValueError(f"Can not find page {i['pid']}")
+                        e.package.add_page(f"{href}#{i['pid']}", p['title'])
+            else:
+                print(f"No content in segment {seg_meta['label']}")
         e.save(output)
 finally:
     cookies.save()
