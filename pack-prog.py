@@ -39,6 +39,12 @@ def add_path_ext(path: str) -> str:
     return path
 
 
+def check_pdb(path: str) -> str:
+    p = splitext(path)[0] + '.pdb'
+    if exists(p):
+        return p
+
+
 def check_needed_prog():
     if system(f'ldd-rust --help > {devnull}'):
         return False
@@ -103,6 +109,12 @@ class Prog:
             print(f'add program: "{pro_w}"')
             self._loc.append(pro_w)
 
+    def add_file(self, path: str):
+        p = getWindowsPath(path)
+        if p not in self._loc:
+            print(f'add file: "{p}"')
+            self._loc.append(p)
+
     def to_7z(self, output: str):
         p = NamedTemporaryFile(delete=False)
         for i in self._loc:
@@ -118,7 +130,8 @@ class Prog:
         remove(fp)
 
 
-def main(prog: List[str], output: str = None):
+def main(prog: List[str], output: str = None, adds: List[str] = None,
+         pdbs: List[str] = None):
     if output is None:
         output = 'prog.7z'
     if not check_needed_prog():
@@ -135,18 +148,45 @@ def main(prog: List[str], output: str = None):
         p.add_prog(pro)
         for i in rel:
             p.add_dep(i)
+    if adds is not None:
+        for f in adds:
+            p.add_file(f)
+    if pdbs:
+        for i in pdbs:
+            pro = abspath(i)
+            pro = add_path_ext(pro)
+            rel = check_prog(pro)
+            if rel is None:
+                print(f'Can not get dependencies for {pro},')
+                exit(-1)
+            fn = check_pdb(pro)
+            if fn:
+                p.add_file(fn)
+            for i in rel:
+                fn = check_pdb(i)
+                if fn:
+                    p.add_file(fn)
     p.to_7z(output)
 
 
 if __name__ == "__main__":
     if len(argv) > 1:
-        d = getopt(argv[1:], 'o:')
+        d = getopt(argv[1:], 'o:a:p:')
         output = None
+        adds = None
+        pdbs = None
         if len(d[0]):
             for i in d[0]:
                 if i[0] == '-o':
                     output = i[1]
-                    break
-        main(d[1], output)
+                elif i[0] == '-a':
+                    if adds is None:
+                        adds = []
+                    adds.append(i[1])
+                elif i[0] == '-p':
+                    if pdbs is None:
+                        pdbs = []
+                    pdbs.append(i[1])
+        main(d[1], output, adds, pdbs)
     else:
         print_help()
