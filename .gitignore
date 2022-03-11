@@ -135,3 +135,4 @@ dmypy.json
 *.jsonc
 *.pyi
 !*.example.jsonc
+*.epub
