@@ -145,6 +145,7 @@ def main():
     book.add_metadata('DC', 'identifier', str(bid), {'id': 'zyid'})
     book.set_language('zh-CN')
     book.add_author(bd["author"])
+    book.add_metadata('DC', 'description', bd['desc'])
     pages = dr.get_page_list(bid)
     top_tocs = [bd["name"]]
     tocs = top_tocs
@@ -175,6 +176,7 @@ def main():
                         if name not in resources:
                             resources.append(name)
                             book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
+                            print(f'img资源已转换：{src} -> {name}')
                         i.attrs['src'] = name
                 elif i.name == 'link':
                     if 'rel' in i.attrs:
@@ -183,8 +185,20 @@ def main():
                                 href = i.attrs['href']
                                 name = get_url_name(href)
                                 if name not in resources:
+                                    content = dr.get(href).content.decode()
+                                    m = URL_RE.search(content)
+                                    while m is not None:
+                                        src = m.group(1)
+                                        name2 = get_url_name(src)
+                                        if name2 not in resources:
+                                            resources.append(name2)
+                                            book.add_item(EpubItem(file_name=name2, content=dr.get(src).content))  # noqa: E501
+                                            print(f'css内部url已转换：{src} -> {name2}')  # noqa: E501
+                                        content = content.replace(src, name2)
+                                        m = URL_RE.search(content)
                                     resources.append(name)
-                                    book.add_item(EpubItem(file_name=name, content=dr.get(href).content))  # noqa: E501
+                                    book.add_item(EpubItem(file_name=name, content=content.encode()))  # noqa: E501
+                                    print(f'css资源已转换：{href} -> {name}')
                                 i.attrs['href'] = name
                 if 'style' in i.attrs:
                     s = i.attrs['style']
@@ -195,6 +209,7 @@ def main():
                         if name not in resources:
                             resources.append(name)
                             book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
+                            print(f'style内部url已转换：{src} -> {name}')
                         s = s.replace(src, name)
                         m = URL_RE.search(s)
                     i.attrs['style'] = s
