@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from copy import copy
 from http.cookiejar import MozillaCookieJar
 from re import compile
 from urllib.parse import urlparse
@@ -167,52 +168,96 @@ def main():
         print(f'正在下载第{p["id"]}章')
         res = dr.get_page(bid, p["id"])
         pa = BeautifulSoup(res.text, 'lxml')
-        for i in pa.descendants:
-            if isinstance(i, Tag):
-                if i.name == 'img':
-                    if 'src' in i.attrs:
-                        src = i.attrs['src']
-                        name = get_url_name(src)
-                        if name not in resources:
-                            resources.append(name)
-                            book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
-                            print(f'img资源已转换：{src} -> {name}')
-                        i.attrs['src'] = name
-                elif i.name == 'link':
-                    if 'rel' in i.attrs:
-                        if 'stylesheet' in i.attrs['rel']:
-                            if 'href' in i.attrs:
-                                href = i.attrs['href']
-                                name = get_url_name(href)
-                                if name not in resources:
-                                    content = dr.get(href).content.decode()
-                                    m = URL_RE.search(content)
-                                    while m is not None:
-                                        src = m.group(1)
-                                        name2 = get_url_name(src)
-                                        if name2 not in resources:
-                                            resources.append(name2)
-                                            book.add_item(EpubItem(file_name=name2, content=dr.get(src).content))  # noqa: E501
-                                            print(f'css内部url已转换：{src} -> {name2}')  # noqa: E501
-                                        content = content.replace(src, name2)
+        pa.attrs['xmlns:epub'] = 'http://www.idpf.org/2007/ops'
+        footnotes = []
+        have_footnote = False
+        while True:
+            for i in pa.descendants:
+                if isinstance(i, Tag):
+                    if i.name == 'img':
+                        if 'src' in i.attrs:
+                            src = i.attrs['src']
+                            name = get_url_name(src)
+                            if name not in resources:
+                                resources.append(name)
+                                book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
+                                print(f'img资源已转换：{src} -> {name}')
+                            i.attrs['src'] = name
+                    elif i.name == 'link':
+                        if 'rel' in i.attrs:
+                            if 'stylesheet' in i.attrs['rel']:
+                                if 'href' in i.attrs:
+                                    href = i.attrs['href']
+                                    name = get_url_name(href)
+                                    if name not in resources:
+                                        content = dr.get(href).content.decode()
                                         m = URL_RE.search(content)
-                                    resources.append(name)
-                                    book.add_item(EpubItem(file_name=name, content=content.encode()))  # noqa: E501
-                                    print(f'css资源已转换：{href} -> {name}')
-                                i.attrs['href'] = name
-                if 'style' in i.attrs:
-                    s = i.attrs['style']
-                    m = URL_RE.search(s)
-                    while m is not None:
-                        src = m.group(1)
-                        name = get_url_name(src)
-                        if name not in resources:
-                            resources.append(name)
-                            book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
-                            print(f'style内部url已转换：{src} -> {name}')
-                        s = s.replace(src, name)
+                                        while m is not None:
+                                            src = m.group(1)
+                                            name2 = get_url_name(src)
+                                            if name2 not in resources:
+                                                resources.append(name2)
+                                                book.add_item(EpubItem(file_name=name2, content=dr.get(src).content))  # noqa: E501
+                                                print(f'css内部url已转换：{src} -> {name2}')  # noqa: E501
+                                            content = content.replace(src, name2)  # noqa: E501
+                                            m = URL_RE.search(content)
+                                        resources.append(name)
+                                        book.add_item(EpubItem(file_name=name, content=content.encode()))  # noqa: E501
+                                        print(f'css资源已转换：{href} -> {name}')
+                                    i.attrs['href'] = name
+                    if 'style' in i.attrs:
+                        s = i.attrs['style']
                         m = URL_RE.search(s)
-                    i.attrs['style'] = s
+                        while m is not None:
+                            src = m.group(1)
+                            name = get_url_name(src)
+                            if name not in resources:
+                                resources.append(name)
+                                book.add_item(EpubItem(file_name=name, content=dr.get(src).content))  # noqa: E501
+                                print(f'style内部url已转换：{src} -> {name}')
+                            s = s.replace(src, name)
+                            m = URL_RE.search(s)
+                        i.attrs['style'] = s
+                    if 'class' in i.attrs:
+                        if 'zhangyue-footnote' in i.attrs['class']:
+                            if 'zy-footnote' in i.attrs:
+                                footnote = i.attrs['zy-footnote']
+                                footnote_id = f'footnote{len(footnotes)}'
+                                if footnote != '':
+                                    tmp = Tag(name='div')
+                                    tmp2 = Tag(name='p')
+                                    tmp.append(tmp2)
+                                    tmp3 = Tag(name='a')
+                                    tmp3.attrs['href'] = f'#{footnote_id}'
+                                    tmp3.attrs['id'] = f'{footnote_id}n'
+                                    # tmp.attrs['epub:type'] = 'footnote'
+                                    tmp3.append(f"[{len(footnotes) + 1}]")
+                                    tmp2.append(tmp3)
+                                    tmp2.append(footnote)
+                                    footnotes.append(tmp)
+                                    i2 = copy(i)
+                                    del i2.attrs['zy-footnote']
+                                    i2.attrs['class'].remove('zhangyue-footnote')  # noqa: E501
+                                    if i2.name == 'img':
+                                        if 'style' in i2.attrs:
+                                            i2.attrs['style'] += 'height: 1em;'
+                                        else:
+                                            i2.attrs['style'] = 'height: 1em;'
+                                    alink = Tag(name='a')
+                                    alink.attrs['href'] = f'#{footnote_id}n'
+                                    alink.attrs['id'] = f'{footnote_id}'
+                                    # alink.attrs['epub:type'] = 'noteref'
+                                    alink.append(i2)
+                                    sup = Tag(name='sup')
+                                    sup.append(alink)
+                                    i.replace_with(sup)
+                                    have_footnote = True
+            if not have_footnote:
+                break
+            have_footnote = False
+        body = pa.find('body')
+        for i in footnotes:
+            body.append(i)
         data = pa.encode(formatter="html5")
         c = RawEpubHtml(f'{p["id"]}.html', file_name=f'{p["id"]}.html', content=data, title=p["chapterName"])  # noqa: E501
         book.add_item(c)
