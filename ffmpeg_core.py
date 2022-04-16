@@ -12,9 +12,14 @@ from ctypes import (
     pointer,
 )
 from ctypes.util import find_library
+from os.path import exists
+from typing import List
 
 
-dll = find_library('ffmpeg_core') or find_library('_ffmpeg_core')
+if exists('ffmpeg_core.dll'):
+    dll = 'ffmpeg_core.dll'
+else:
+    dll = find_library('ffmpeg_core') or find_library('_ffmpeg_core')
 dll = CDLL(dll)
 free_music_handle = dll.free_music_handle
 free_music_handle.restype = None
@@ -140,6 +145,28 @@ ffmpeg_core_get_metadata.argtypes = [c_void_p, c_char_p]
 ffmpeg_core_info_get_metadata = dll.ffmpeg_core_info_get_metadata
 ffmpeg_core_info_get_metadata.restype = c_void_p
 ffmpeg_core_info_get_metadata.argtypes = [c_void_p, c_char_p]
+ffmpeg_core_init_settings = dll.ffmpeg_core_init_settings
+ffmpeg_core_init_settings.restype = c_void_p
+ffmpeg_core_init_settings.argtypes = []
+version: int = ffmpeg_core_version()
+version: List[int] = [i for i in version.to_bytes(4, 'big')]
+if version >= [1, 0, 0, 1]:
+    ffmpeg_core_is_wasapi_supported = dll.ffmpeg_core_is_wasapi_supported
+    ffmpeg_core_is_wasapi_supported.restype = c_int
+    ffmpeg_core_is_wasapi_supported.argtypes = []
+    ffmpeg_core_settings_set_use_WASAPI = dll.ffmpeg_core_settings_set_use_WASAPI  # noqa: E501
+    ffmpeg_core_settings_set_use_WASAPI.restype = c_int
+    ffmpeg_core_settings_set_use_WASAPI.argtypes = [c_void_p, c_int]
+    ffmpeg_core_settings_set_enable_exclusive = dll.ffmpeg_core_settings_set_enable_exclusive  # noqa: E501
+    ffmpeg_core_settings_set_enable_exclusive.restype = c_int
+    ffmpeg_core_settings_set_enable_exclusive.argtypes = [c_void_p, c_int]
+    ffmpeg_core_settings_set_max_wait_time = dll.ffmpeg_core_settings_set_max_wait_time  # noqa: E501
+    ffmpeg_core_settings_set_max_wait_time.restype = c_int
+    ffmpeg_core_settings_set_max_wait_time.argtypes = [c_void_p, c_int]
+if version >= [1, 0, 0, 2]:
+    ffmpeg_core_settings_set_wasapi_min_buffer_time = dll.ffmpeg_core_settings_set_wasapi_min_buffer_time  # noqa: E501
+    ffmpeg_core_settings_set_wasapi_min_buffer_time.restype = c_int
+    ffmpeg_core_settings_set_wasapi_min_buffer_time.argtypes = [c_void_p, c_int]  # noqa: E501
 
 
 class FFMPEGCoreError(Exception):
@@ -157,12 +184,53 @@ class FFMPEGCoreError(Exception):
         Exception.__init__(self, f"{self.err} {self.msg}")
 
 
+class FFMPEGHigherVersionNeededError(Exception):
+    pass
+
+
+class FFMPEGCoreSettings:
+    def __init__(self):
+        self._h = ffmpeg_core_init_settings()
+
+    def __del__(self):
+        if self._h:
+            free_ffmpeg_core_settings(self._h)
+            self._h = None
+
+    def set_use_WASAPI(self, enable: bool):
+        if version >= [1, 0, 0, 1] and ffmpeg_core_is_wasapi_supported():
+            return not ffmpeg_core_settings_set_use_WASAPI(self._h, 1 if enable else 0)  # noqa: E501
+        else:
+            raise Exception('WASAPI is not supported')
+
+    def set_enable_exclusive(self, enable: bool):
+        if version >= [1, 0, 0, 1] and ffmpeg_core_is_wasapi_supported():
+            return not ffmpeg_core_settings_set_enable_exclusive(self._h, 1 if enable else 0)  # noqa: E501
+        else:
+            raise Exception('WASAPI is not supported')
+
+    def set_max_wait_time(self, time: int):
+        if version >= [1, 0, 0, 1]:
+            ffmpeg_core_settings_set_max_wait_time(self._h, time)
+        else:
+            raise FFMPEGHigherVersionNeededError
+
+    def set_wasapi_min_buffer_time(self, time: int):
+        if version >= [1, 0, 0, 2] or ffmpeg_core_is_wasapi_supported():
+            return not ffmpeg_core_settings_set_wasapi_min_buffer_time(self._h, time)  # noqa: E501
+        else:
+            raise Exception('WASAPI is not supported')
+
+
 class FFMPEGCore:
-    def __init__(self, fn: str):
+    def __init__(self, fn: str, settings: FFMPEGCoreSettings = None):
         self._fn = fn
         self._h = c_void_p()
         self._opened = False
-        r = ffmpeg_core_open(fn, pointer(self._h))
+        if settings is None:
+            r = ffmpeg_core_open(fn, pointer(self._h))
+        else:
+            r = ffmpeg_core_open2(fn, pointer(self._h), settings._h)
         if r == 0:
             self._opened = True
         else:
