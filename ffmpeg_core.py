@@ -167,6 +167,9 @@ if version >= [1, 0, 0, 2]:
     ffmpeg_core_settings_set_wasapi_min_buffer_time = dll.ffmpeg_core_settings_set_wasapi_min_buffer_time  # noqa: E501
     ffmpeg_core_settings_set_wasapi_min_buffer_time.restype = c_int
     ffmpeg_core_settings_set_wasapi_min_buffer_time.argtypes = [c_void_p, c_int]  # noqa: E501
+    ffmpeg_core_set_reverb = dll.ffmpeg_core_set_reverb
+    ffmpeg_core_set_reverb.restype = c_int
+    ffmpeg_core_set_reverb.argtypes = [c_void_p, c_int, c_float, c_float]
 
 
 class FFMPEGCoreError(Exception):
@@ -261,6 +264,9 @@ class FFMPEGCore:
         if self._opened:
             return ffmpeg_core_get_channels(self._h)
 
+    def clear_reverb(self):
+        self.set_reverb(0, 0.0, 0.0)
+
     def close(self):
         if self._opened:
             free_music_handle(self._h)
@@ -308,6 +314,12 @@ class FFMPEGCore:
         pos = int(pos * 1E6)
         if self._opened:
             r = ffmpeg_core_seek(self._h, pos)
+            if r:
+                raise FFMPEGCoreError(r)
+
+    def set_reverb(self, type: int, mix: float, time: float):
+        if self._opened:
+            r = ffmpeg_core_set_reverb(self._h, type, mix, time)
             if r:
                 raise FFMPEGCoreError(r)
 
