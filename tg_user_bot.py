@@ -173,8 +173,12 @@ async def handle_message_info(lib: TdLib, mes):
                 me += f"\nSticker Width: `{st['width']}`"
                 me += f"\nSticker Height: `{st['height']}`"
                 me += f"\nSticker Emoji: `{st['emoji']}`"
-                me += f"\nAnimated Sticker: `{st['is_animated']}`"
-                me += f"\nMask Sticker: `{st['is_mask']}`"
+                if 'is_animated' in st:
+                    me += f"\nAnimated Sticker: `{st['is_animated']}`"
+                if 'is_mask' in st:
+                    me += f"\nMask Sticker: `{st['is_mask']}`"
+                if 'type' in st:
+                    me += f"\nSticker Type: `{repr(st['type'])}`"
                 if 'sticker' in st and st['sticker'] is not None:
                     me += "\nSticker File Info:"
                     me += "\n" + generateFileInfo(st['sticker'])

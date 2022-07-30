@@ -433,6 +433,77 @@ def parse_message_sending_state(d):
     raise ValueError(f'Unknown value: {d}')
 
 
+class StickerType:
+    def __iter__(self):
+        return self.to_dict().items().__iter__()
+
+    def to_dict(self) -> dict:
+        pass
+
+    def __repr__(self) -> str:
+        d = self.to_dict()
+        if d is None:
+            m = ''
+        else:
+            typ = d['@type'][11:]
+            d.pop('@type')
+            m = f"Type={typ} Data={d}"
+        return f"<{self.__class__.__module__}.{self.__class__.__name__} {m}>"
+
+    def __str__(self):
+        d = self.to_dict()
+        if d is None:
+            return ''
+        return d['@type'][11:]
+
+
+class StickerTypeStatic(StickerType):
+    def __init__(self, *_) -> None:
+        pass
+
+    def to_dict(self) -> dict:
+        return {'@type': "stickerTypeStatic"}
+
+
+class StickerTypeVideo(StickerType):
+    def __init__(self, *_) -> None:
+        pass
+
+    def to_dict(self) -> dict:
+        return {'@type': "stickerTypeVideo"}
+
+
+class StickerTypeAnimated(StickerType):
+    def __init__(self, *_) -> None:
+        pass
+
+    def to_dict(self) -> dict:
+        return {'@type': "stickerTypeAnimated"}
+
+
+class StickerTypeMask(StickerType):
+    def __init__(self, v = None) -> None:
+        if isinstance(v, dict):
+            if v['@type'] == 'stickerTypeMask':
+                self.mask_position = v['mask_position']
+                return
+        elif v is None:
+            return
+        raise ValueError(f'Unknown value: {v}')
+
+    def to_dict(self) -> dict:
+        return {'@type': "stickerTypeMask", 'mask_position': self.mask_position}
+
+
+def parse_sticker_type(d):
+    if d['@type'].startswith('stickerType'):
+        typ = 'S' + d['@type'][1:]
+        gb = globals()
+        if typ in gb:
+            return globals()[typ](d)
+    raise ValueError(f'Unknown value: {d}')
+
+
 class UpdateMessageSend:
     def __iter__(self):
         return self.to_dict().items().__iter__()
@@ -547,6 +618,8 @@ def json_object_hook(value):
                     value['set_id'] = int(value['set_id'])
                 elif value['@type'] == 'stickerSet':
                     value['id'] = int(value['id'])
+                elif value['@type'].startswith('stickerType'):
+                    return parse_sticker_type(value)
     except Exception:
         print_exc()
         return value
@@ -560,7 +633,7 @@ class TdLibJSONDecoder(JSONDecoder):
 
 class TdLibJSONEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin, ChatList, MessageSendingState, UpdateMessageSend)):  # noqa: E501
+        if isinstance(o, (ChatType, TextParseMode, MessageForwardOrigin, ChatList, MessageSendingState, UpdateMessageSend, StickerType)):  # noqa: E501
             return dict(o)
         elif isinstance(o, bytes):
             return b64encode(o).decode()
