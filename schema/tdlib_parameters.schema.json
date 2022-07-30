@@ -1,0 +1,81 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "https://github.com/lifegpc/pythonscript/raw/master/schema/tdlib_parameters.schema.json",
+    "title": "Tdlib Parameters",
+    "description": "Parameters of tdlib. Detailed information is availabled on https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1tdlib_parameters.html",
+    "type": "object",
+    "properties": {
+        "api_hash": {
+            "description": "Application identifier hash for Telegram API access, which can be obtained at https://my.telegram.org.",
+            "type": "string"
+        },
+        "api_id": {
+            "description": "Application identifier for Telegram API access, which can be obtained at https://my.telegram.org .",
+            "type": "number",
+            "maximum": 2147483647,
+            "minimum": -2147483648
+        },
+        "application_version": {
+            "description": "Application version; must be non-empty.",
+            "type": "string",
+            "default": "1.0.0"
+        },
+        "database_directory": {
+            "description": "The path to the directory for the persistent database; if empty, the current working directory will be used.",
+            "type": "string"
+        },
+        "device_model": {
+            "description": "Model of the device the application is being run on; must be non-empty.",
+            "type": "string",
+            "default": "Desktop"
+        },
+        "enable_storage_optimizer": {
+            "description": "If set to true, old files will automatically be deleted.",
+            "type": "string",
+            "default": true
+        },
+        "files_directory": {
+            "description": "The path to the directory for storing files; if empty, database_directory will be used.",
+            "type": "string"
+        },
+        "ignore_file_names": {
+            "description": "If set to true, original file names will be ignored. Otherwise, downloaded files will be saved under names as close as possible to the original name.",
+            "type": "boolean",
+            "default": false
+        },
+        "system_language_code": {
+            "description": "IETF language tag of the user's operating system language; must be non-empty.",
+            "type": "string",
+            "default": "en"
+        },
+        "system_version": {
+            "description": "Version of the operating system the application is being run on. If empty, the version is automatically detected by TDLib.",
+            "type": "string"
+        },
+        "use_chat_info_database": {
+            "description": "If set to true, the library will maintain a cache of users, basic groups, supergroups, channels and secret chats. Implies use_file_database.",
+            "type": "boolean",
+            "default": false
+        },
+        "use_file_database": {
+            "description": "If set to true, information about downloaded and uploaded files will be saved between application restarts.",
+            "type": "boolean",
+            "default": false
+        },
+        "use_message_database": {
+            "description": "If set to true, the library will maintain a cache of chats and messages. Implies use_chat_info_database.",
+            "type": "boolean",
+            "default": false
+        },
+        "use_secret_chats": {
+            "description": "If set to true, support for secret chats will be enabled.",
+            "type": "boolean",
+            "default": true
+        },
+        "use_test_dc": {
+            "description": "If set to true, the Telegram test environment will be used instead of the production environment.",
+            "type": "boolean",
+            "default": false
+        }
+    }
+}

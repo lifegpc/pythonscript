@@ -1,0 +1,95 @@
+{
+    "$schema": "http://json-schema.org/schema",
+    "$id": "https://github.com/lifegpc/pythonscript/raw/master/schema/tdlib.schema.json",
+    "title": "Tdlib",
+    "description": "Tdlib settings",
+    "type": "object",
+    "properties": {
+        "bot_encryption_key": {
+            "$ref": "base64.schema.json",
+            "description": "Encryption key to check or set up for bot. Need base64 encoded.",
+            "minLength": 4
+        },
+        "bot_token": {
+            "description": "Bot Token, which can be obtained with @BotFather .",
+            "type": "string"
+        },
+        "BotTdlibParameters": {
+            "$ref": "tdlib_parameters.schema.json",
+            "description": "Same as TdlibParameters, but when creating a bot session, these parameters will override parameters in TdlibParameters",
+            "required": [
+                "database_directory"
+            ]
+        },
+        "encryption_key": {
+            "$ref": "base64.schema.json",
+            "description": "Encryption key to check or set up. Need base64 encoded.",
+            "minLength": 4
+        },
+        "phone_number": {
+            "description": "User's phone number",
+            "type": "string",
+            "pattern": "^\\+?[0-9]+$"
+        },
+        "proxy": {
+            "description": "Proxy settings.",
+            "type": "object",
+            "properties": {
+                "port": {
+                    "description": "The port of the proxy.",
+                    "type": "number"
+                },
+                "server": {
+                    "description": "The server address of the proxy.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "The type of the proxy.",
+                    "type": "object",
+                    "properties": {
+                        "@type": {
+                            "description": "The type of the proxy type. Support proxyTypeHttp, proxyTypeSocks5, proxyTypeMtproto.",
+                            "type": "string",
+                            "enum": ["proxyTypeHttp", "proxyTypeSocks5", "proxyTypeMtproto"]
+                        },
+                        "http_only": {
+                            "description": "Pass true if the proxy supports only HTTP requests and doesn't support transparent TCP connections via HTTP CONNECT method. Supported if @type is proxyTypeHttp.",
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "password": {
+                            "description": "The password to authenticate. Supported if @type is proxyTypeHttp or proxyTypeSocks5",
+                            "type": "string"
+                        },
+                        "secret": {
+                            "description": "The proxy's secret in hexadecimal encoding. Supported if @type is proxyTypeMtproto.",
+                            "type": "string",
+                            "pattern": "^[0-9a-fA-F]+$"
+                        },
+                        "username": {
+                            "description": "The username to authenticate. Supported if @type is proxyTypeHttp or proxyTypeSocks5",
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "required": [
+                "port",
+                "server",
+                "type"
+            ]
+        },
+        "TdlibParameters": {
+            "$ref": "tdlib_parameters.schema.json",
+            "required": [
+                "api_hash",
+                "api_id"
+            ]
+        }
+    },
+    "required": [
+        "encryption_key",
+        "phone_number",
+        "TdlibParameters"
+    ]
+}
