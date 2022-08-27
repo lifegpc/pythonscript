@@ -402,7 +402,10 @@ def run(args: Optional[List[str]] = None):
     if args.verbose > 1:
         print(args)
     if args.ACTION in ['d', 'dump']:
-        data = {'path': args.PATH, 'base': args.base, 'tree': {}}
+        args.base = abspath(args.base)
+        data = {'path': [], 'base': args.base, 'tree': {}}
+        for p in args.PATH:
+            data['path'].append(relpath(abspath(p), args.base))
     elif args.ACTION in ['m', 'modify']:
         if args.type == 'json':
             with open(args.file, 'r', encoding='UTF-8') as f:
@@ -411,9 +414,12 @@ def run(args: Optional[List[str]] = None):
             with open(args.file, 'r', encoding='UTF-8') as f:
                 data = loadyaml(f, SafeLoader)
         if args.PATH is None:
-            args.PATH = data['path']
+            for p in data['path']:
+                args.PATH.append(join(args.base, p))
         if args.base is None:
             args.base = data['base']
+        else:
+            args.base = abspath(args.base)
     if args.verbose > 2:
         print(data)
     for p in args.PATH:
