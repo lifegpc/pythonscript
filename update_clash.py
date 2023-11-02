@@ -25,13 +25,30 @@ p.add_argument("-c", "--config", help="configurtion files",
 arg = p.parse_intermixed_args()
 with open(arg.config) as f:
     config = load(f, Loader=SafeLoader)
-ori = load(get_src(config["src"]), Loader=SafeLoader)
+src = config["src"]
+if not isinstance(src, list):
+    src = [src]
 with open(config["dest"]) as f:
     dest = load(f, Loader=SafeLoader)
-dest["proxies"] = ori["proxies"]
+dest["proxies"] = []
+dest["proxy-groups"] = []
+more_groups = []
+for s in src:
+    add_group = False
+    if isinstance(s, dict):
+        if "add-group" in s and s["add-group"] and "name" in s and s["name"]:
+            add_group = True
+    ori = load(get_src(s), Loader=SafeLoader)
+    dest["proxies"] += ori["proxies"]
+    dest["proxy-groups"] += ori["proxy-groups"]
+    if add_group:
+        more_groups.append({
+            "name": s["name"],
+            "type": "select",
+            "proxies": [i["name"] for i in ori["proxies"]]
+        })
 if "proxies" in config:
     dest["proxies"] += config["proxies"]
-dest["proxy-groups"] = ori["proxy-groups"]
 if "proxy-groups" in config:
     dest["proxy-groups"] = []
     for group in config["proxy-groups"]:
@@ -54,6 +71,7 @@ if "proxy-groups" in config:
                 group['proxies'].append('DIRECT')
             del group['add-direct']
         dest["proxy-groups"].append(group)
+dest["proxy-groups"] += more_groups
 if 'rules' in config:
     dest['rules'] = config['rules']
 with open(config["dest"], "w") as f:
