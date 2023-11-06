@@ -1,4 +1,5 @@
 from base64 import b64decode, b64encode
+
 from hashlib import sha512
 from typing import Union
 from cryptography.hazmat.primitives import serialization as ser
@@ -6,9 +7,14 @@ from cryptography.hazmat.primitives.asymmetric import padding
 import requests as r
 from urllib.parse import urlparse, urlencode
 from posixpath import basename
+from json import dumps as _dumps
 
 HOST = "http://localhost:8080"
 HEADERS = {}
+
+
+def dumps(obj):
+    return _dumps(obj, ensure_ascii=False, separators=(',', ':'))
 
 
 def check_err(re):
@@ -78,7 +84,7 @@ def add_user(username: str, password: str, name: str,
         token = None
         token_id = None
     pas = key.encrypt(password.encode(), padding.PKCS1v15())
-    return check_err(post("/auth/user/add", token, token_id, {"username": username, "name": name, "password": b64encode(pas)}).json())  # noqa: E501
+    return check_err(post("auth/user/add", token, token_id, {"username": username, "name": name, "password": b64encode(pas)}).json())  # noqa: E501
 
 
 def get_proxy_pixiv_url(url: str, secrets: str):
@@ -91,3 +97,35 @@ def get_proxy_pixiv_url(url: str, secrets: str):
     data['sign'] = gen_sign(data, secrets.encode())
     name = basename(u.path)
     return f"{HOST}/proxy/pixiv/{name}?{urlencode(data)}"
+
+
+def add_push_task(config, push_configs, ttl: int = None,
+                  token: Union[bytes, str] = None, token_id: int = None):
+    data = {'config': dumps(config), 'push_configs': dumps(push_configs)}
+    if ttl is not None:
+        data['ttl'] = f"{ttl}"
+    return check_err(post("push/add", token, token_id, data).json())
+
+
+def change_push_task(id: int, config=None, push_configs=None, ttl: int = None,
+                     token: Union[bytes, str] = None, token_id: int = None):
+    data = {'id': f"{id}"}
+    if config is not None:
+        data['config'] = dumps(config)
+    if push_configs is not None:
+        data['push_configs'] = dumps(push_configs)
+    if ttl is not None:
+        data['ttl'] = f"{ttl}"
+    return check_err(post("push/change", token, token_id, data).json())
+
+
+def get_push_task(id: int, token: Union[bytes, str] = None,
+                  token_id: int = None):
+    return check_err(post("push/get", token, token_id, {"id": f"{id}"}).json())
+
+
+def test_push_task(config, push_configs, test_send_mode: Union[str, int],
+                   token: Union[bytes, str] = None, token_id: int = None):
+    data = {'config': dumps(config), 'push_configs': dumps(
+        push_configs), 'test_send_mode': dumps(test_send_mode)}
+    return check_err(post("push/test", token, token_id, data).json())
