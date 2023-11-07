@@ -8,6 +8,7 @@ import requests as r
 from urllib.parse import urlparse, urlencode
 from posixpath import basename
 from json import dumps as _dumps
+from time import time
 
 HOST = "http://localhost:8080"
 HEADERS = {}
@@ -32,14 +33,9 @@ def post(path: str, token: Union[bytes, str] = None, token_id: int = None,
         return r.post(f"{HOST}/{path}", data=data, headers=HEADERS)
     if isinstance(token, str):
         token = b64decode(token)
-    keys = sorted([i for i in data.keys()])
-    u = sha512()
-    u.update(token)
-    for key in keys:
-        u.update(key.encode() if isinstance(key, str) else key)
-        v = data[key]
-        u.update(v.encode() if isinstance(v, str) else v)
-    h = {'X-TOKEN-ID': str(token_id), 'X-SIGN': u.hexdigest()}
+    if isinstance(data, dict):
+        data['t'] = f"{round(time())}"
+    h = {'X-TOKEN-ID': str(token_id), 'X-SIGN': gen_sign(data, token)}
     h.update(HEADERS)
     return r.post(f"{HOST}/{path}", headers=h, data=data)
 
@@ -63,6 +59,8 @@ def get(path: str, token: Union[bytes, str] = None, token_id: int = None,
         return r.get(f"{HOST}/{path}", data=data, headers=HEADERS)
     if isinstance(token, str):
         token = b64decode(token)
+    if isinstance(data, dict):
+        data['t'] = f"{round(time())}"
     h = {'X-TOKEN-ID': str(token_id), 'X-SIGN': gen_sign(data, token)}
     h.update(HEADERS)
     return r.get(f"{HOST}/{path}", headers=h, data=data)
@@ -85,6 +83,17 @@ def add_user(username: str, password: str, name: str,
         token_id = None
     pas = key.encrypt(password.encode(), padding.PKCS1v15())
     return check_err(post("auth/user/add", token, token_id, {"username": username, "name": name, "password": b64encode(pas)}).json())  # noqa: E501
+
+
+def add_token(username: str, password: str):
+    re = check_err(post("/auth/pubkey").json())
+    key = ser.load_pem_public_key(re['key'].encode())
+    pas = key.encrypt(password.encode(), padding.PKCS1v15())
+    return check_err(post("/auth/token/add", None, None, {"username": username, "password": b64encode(pas)}).json())  # noqa: E501
+
+
+def extend_token(token: Union[bytes, str], token_id: int):
+    return check_err(post("/auth/token/extend", token, token_id).json())
 
 
 def get_proxy_pixiv_url(url: str, secrets: str):
