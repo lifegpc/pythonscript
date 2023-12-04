@@ -7,7 +7,7 @@ from os import listdir, remove, link, symlink, makedirs
 from subprocess import PIPE, Popen
 
 
-FMT = re.compile(r"(\d+)/(\d+)")
+FMT = re.compile(r"(\d+)(/(\d+))?")
 
 
 def generate_thumb(input: str, output: str):
@@ -32,6 +32,10 @@ def generate_path(input: str):
             thumb = True
             break
     m = i.meta.to_dict()
+    tmp = {}
+    for i in m:
+        tmp[i.lower()] = m[i]
+    m = tmp
     artist = m.get('album_artist', m.get('artist', None))
     album = m.get('album', None)
     title = m.get('title', None)
@@ -39,22 +43,23 @@ def generate_path(input: str):
     track = m.get('track', None)
     if artist is None or album is None or title is None:
         raise ValueError("No artist, album or title")
+    thumb = join(arg.OUTPUT, artist, album, arg.cover) if thumb else None
     discs = FMT.match(disc)
     if discs is None:
         raise ValueError(f"Failed to parse discs {disc}")
-    discs = discs.group(1, 2)
-    discs = (int(discs[0]), int(discs[1]))
-    if discs[1] == 1:
+    discs = discs.group(1, 3)
+    discs = (int(discs[0]), int(discs[1]) if discs[1] is not None else None)
+    if discs[1] == 1 or discs[1] is None:
         if track is None:
             return (join(arg.OUTPUT, artist, album, title + ext), thumb)
         else:
             tracks = FMT.match(track)
             if tracks is None:
                 raise ValueError(f"Failed to parse tracks {track}")
-            tracks = tracks.group(1, 2)
-            tracks = (int(tracks[0]), int(tracks[1]))
+            tracks = tracks.group(1, 3)
+            track0 = int(tracks[0])
             return (join(arg.OUTPUT, artist, album,
-                         f"{tracks[0]:02} - {title}{ext}"), thumb)
+                         f"{track0:02} - {title}{ext}"), thumb)
     else:
         if track is None:
             return (join(arg.OUTPUT, artist, album, f"Disc {discs[0]}",
@@ -63,10 +68,10 @@ def generate_path(input: str):
             tracks = FMT.match(track)
             if tracks is None:
                 raise ValueError(f"Failed to parse tracks {track}")
-            tracks = tracks.group(1, 2)
-            tracks = (int(tracks[0]), int(tracks[1]))
+            tracks = tracks.group(1, 3)
+            track0 = int(tracks[0])
             return (join(arg.OUTPUT, artist, album, f"Disc {discs[0]}",
-                         f"{tracks[0]:02} - {title}{ext}"), thumb)
+                         f"{track0:02} - {title}{ext}"), thumb)
 
 
 def get_m4a_files(dir: str, r: bool) -> List[str]:
@@ -79,7 +84,7 @@ def get_m4a_files(dir: str, r: bool) -> List[str]:
         if isdir(file):
             if r:
                 re += get_m4a_files(file, r)
-        elif file.endswith('.m4a'):
+        elif file.endswith('.m4a') or file.endswith(".flac"):
             re.append(file)
     return re
 
@@ -106,7 +111,7 @@ for f in get_m4a_files(arg.INPUT, arg.recursive):
     if arg.verbose:
         print(f"Target path: {r[0]}")
     if r[1]:
-        thumb = join(split(r[0])[0], arg.cover)
+        thumb = r[1]
         if arg.verbose:
             print(f"Target thumb: {thumb}")
         if not exists(thumb):
