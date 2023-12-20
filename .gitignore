@@ -137,4 +137,7 @@ dmypy.json
 !*.example.jsonc
 *.epub
 !*.schema.json
-update_clash.yaml
+*.yaml
+*.yml
+*.conf
+!*.example.yaml

@@ -39,6 +39,8 @@ for s in src:
         if "add-group" in s and s["add-group"] and "name" in s and s["name"]:
             add_group = True
     ori = load(get_src(s), Loader=SafeLoader)
+    if ori is None:
+        raise ValueError(f"Failed to download src: {s}")
     dest["proxies"] += ori["proxies"]
     dest["proxy-groups"] += ori["proxy-groups"]
     if add_group:

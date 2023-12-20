@@ -1,0 +1,45 @@
+# 订阅来源
+src:
+    # 来源名称（可选）
+  - name: TAG
+    # 是否用该来源的节点生成一个代理组（名称使用来源名称）
+    # 默认 false
+    add-group: true
+    # 订阅地址
+    url: URL
+    # HTTP 头部 （可选）
+    headers:
+      User-Agent: ClashforWindows/0.13.8
+  # 订阅地址
+  - URL
+# 输出文件位置（需要文件本身存在）
+dest: output.yaml
+# 添加自定义节点
+proxies:
+  - name: WARP
+    type: socks5
+    server: localhost
+    port: 7891
+# 添加自定义规则组
+proxy-groups:
+  - name: all
+    type: select
+    proxies:
+      - group1
+      - group2
+    # 是否将DIRECT加至列表
+    add-direct: true
+  - name: JP
+    type: select
+    # 将符合下列正则的加至列表
+    match:
+      - .*JP
+      - .*日本.*
+  - name: All
+    type: select
+    # 将所有节点/组加至列表
+    match-all: true
+    add-direct: true
+# 自定义节点（默认覆盖）
+rules:
+  - MATCH,All
