@@ -33,6 +33,11 @@ with open(config["dest"]) as f:
 dest["proxies"] = []
 dest["proxy-groups"] = []
 more_groups = []
+keep_rules = config["keep-rules"] if "keep-rules" in config else False
+prepend_rules = config["prepend-rules"] if "prepend-rules" in config else False
+if keep_rules:
+    dest["rules"] = []
+last_match_rule = "MATCH,DIRECT"
 for s in src:
     add_group = False
     if isinstance(s, dict):
@@ -43,6 +48,9 @@ for s in src:
         raise ValueError(f"Failed to download src: {s}")
     dest["proxies"] += ori["proxies"]
     dest["proxy-groups"] += ori["proxy-groups"]
+    if keep_rules:
+        dest["rules"] += ori["rules"][:-1]
+        last_match_rule = ori["rules"][-1]
     if add_group:
         more_groups.append({
             "name": s["name"],
@@ -51,8 +59,10 @@ for s in src:
         })
 if "proxies" in config:
     dest["proxies"] += config["proxies"]
+keep_proxy_groups = config["keep-proxy-groups"] if "keep-proxy-groups" in config else False
 if "proxy-groups" in config:
-    dest["proxy-groups"] = []
+    if not keep_proxy_groups:
+        dest["proxy-groups"] = []
     for group in config["proxy-groups"]:
         if 'proxies' not in group:
             group['proxies'] = []
@@ -75,6 +85,15 @@ if "proxy-groups" in config:
         dest["proxy-groups"].append(group)
 dest["proxy-groups"] += more_groups
 if 'rules' in config:
-    dest['rules'] = config['rules']
+    if keep_rules:
+        if prepend_rules:
+            dest['rules'] = config['rules'][:-1] + dest['rules']
+            dest['rules'].append(config['rules'][-1])
+        else:
+            dest['rules'] += config['rules']
+    else:
+        dest['rules'] = config['rules']
+elif keep_rules:
+    dest['rules'].append(last_match_rule)
 with open(config["dest"], "w") as f:
     dump(dest, f, Dumper=SafeDumper, allow_unicode=True)

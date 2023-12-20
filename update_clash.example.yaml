@@ -20,6 +20,9 @@ proxies:
     type: socks5
     server: localhost
     port: 7891
+# 保留来自订阅来源的订阅组
+# 默认 false
+keep-proxy-groups: true
 # 添加自定义规则组
 proxy-groups:
   - name: all
@@ -28,6 +31,7 @@ proxy-groups:
       - group1
       - group2
     # 是否将DIRECT加至列表
+    # 默认 false
     add-direct: true
   - name: JP
     type: select
@@ -38,8 +42,15 @@ proxy-groups:
   - name: All
     type: select
     # 将所有节点/组加至列表
+    # 默认 false
     match-all: true
     add-direct: true
-# 自定义节点（默认覆盖）
+# 保留来自订阅来源的规则
+# 默认 false
+keep-rules: true
+# 将自定义规则加到来自订阅的规则前
+# 默认 false
+prepend-rules: false
+# 自定义规则
 rules:
   - MATCH,All
