@@ -164,13 +164,14 @@ class Cml:
         self.duration = None
         self.dir = None
         self.offset = False
+        self.in_place = False
         if len(arg) == 0:
             self.print_help()
             exit(0)
         try:
-            r = getopt(arg, '-hVvo:f:t:d:',
+            r = getopt(arg, '-hVvo:f:t:d:i',
                        ['help', 'version', 'verbose', 'output=', 'file=',
-                        'duration=', 'dir=', 'offset'])
+                        'duration=', 'dir=', 'offset', 'in-place'])
             for i in r[0]:
                 if i[0] == '-h' or i[0] == '--help':
                     self.print_help()
@@ -190,6 +191,8 @@ class Cml:
                     self.dir = i[1]
                 elif i[0] == '--offset':
                     self.offset = True
+                elif i[0] == '-i' or i[0] == '--in-place':
+                    self.in_place = True
             if len(r[1]) == 0:
                 raise GetoptError('Input lyric file is needed.')
             if len(r[1]) > 1:
@@ -213,7 +216,8 @@ Options:
     -t, --duration <time>   Specify the duration of music.
     -d, --dir <path>        Specify the output directory.
         --offset            Remove offset tag in lryic file and apply offset
-                            for lyric''')
+                            for lyric.
+    -i, --in-place          Edit lyric in place.''')
 
     def print_version(self):
         print('convert_lrc.py v1.0.0.0')
@@ -243,7 +247,9 @@ def main() -> int:
     if cml.verbose:
         print(f'Duration: {dur}')
     output = None
-    if cml.output:
+    if cml.in_place:
+        output = cml.input
+    elif cml.output:
         output = cml.output
     elif cml.file and have_rssbotlib and metadata is not None:
         output = generate_good_filename(metadata)
