@@ -76,6 +76,13 @@ class Lyric:
                 re.append({'time': max(ltmp, round(i['time'] - 0.01, 2)),
                            'data': tmp})
                 tmp = None
+            elif i['time'] == ltmp:
+                if tmp is None:
+                    tmp = i['data']
+                else:
+                    re.append({'time': ltmp, 'data': tmp})
+                    tmp = i['data']
+                continue
             s: str = i['data']
             if s.find(' / ') > 0:
                 li = s.split(' / ', 1)
@@ -83,6 +90,7 @@ class Lyric:
                 tmp = li[1]
                 re.append({'time': i['time'], 'data': li[0]})
             else:
+                ltmp = i['time']
                 re.append(i.copy())
         if tmp is not None:
             if dur is not None:
