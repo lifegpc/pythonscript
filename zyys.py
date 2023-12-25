@@ -247,8 +247,14 @@ class Main():
         print("获取签到信息...")
         data = self._client.get_ningbo_schedule_init_data()
         print("已签到列表：")
+        i = 1
         for x in data["signlist"]:
-            print(x)
+            print(f"{i}.签到时间：{x['signtime']}")
+            print(f"地点：{x['longitude']},{x['latitude']}({x['localname']})")
+            print(f"签到类型：{x['signtype']}")
+            print(f"位置ID：{x['localtionid']}")
+            print(f"备注：{x['note']}")
+            i += 1
         prompt = f"要进行{data['buttonname']}吗？(y/n)"
         while True:
             s = input(prompt)
