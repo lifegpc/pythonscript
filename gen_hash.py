@@ -12,6 +12,7 @@ try:
         TimeRemainingColumn,
         TransferSpeedColumn,
         DownloadColumn,
+        MofNCompleteColumn,
     )
     from rich.table import Table
     have_rich = True
@@ -67,6 +68,7 @@ def main(args=None):
                                     SpinnerColumn(),
                                     BarColumn(),
                                     TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),  # noqa: E501
+                                    MofNCompleteColumn(),
                                     )
                 job_progress = Progress("{task.description}",
                                         SpinnerColumn(),
