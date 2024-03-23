@@ -21,19 +21,22 @@ except ImportError:
 
 
 p = ArgumentParser(description='Generate checksum of files.')
+p.add_argument('-a', '--all', help='Include all files, including hidden files.', action='store_true')  # noqa: E501
 p.add_argument("-o", "--output", help='The path to output file. Default: checksum.txt. Releative path is relative to the input directory.', default="checksum.txt")  # noqa: E501
 p.add_argument("-m", "--method", help='The hash method to use. Default: md5. Available choices: md5, sha1, sha224, sha256, sha384, sha512.', choices=['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'], metavar='METHOD', default="md5")  # noqa: E501
 p.add_argument("input", help='The path to the input file or directory.', nargs='*', default=['.'])  # noqa: E501
 
 
-def list_files(input: str, output=None):
+def list_files(input: str, all: bool, output=None):
     files = []
     for i in listdir(input):
+        if not all and i.startswith('.'):
+            continue
         path = join(input, i)
         if isfile(path):
             files.append(path)
         elif isdir(path):
-            files.extend(list_files(path, None))
+            files.extend(list_files(path, all, None))
     if output is not None:
         output_file = join(input, output)
         if output_file in files:
@@ -53,14 +56,14 @@ def cal_hash(file: str, method: str, task=None, progress=None):
                 progress.update(task, advance=len(data))
     t = f"{h.hexdigest()}  {file}\n"
     if progress is None or task is None:
-        print(t)
+        print(t, end='')
     return t
 
 
 def main(args=None):
     arg = p.parse_intermixed_args(args)
     for i in arg.input:
-        files = list_files(i, arg.output)
+        files = list_files(i, arg.all, arg.output)
         output_file = join(i, arg.output)
         with open(output_file, encoding='UTF-8', mode='w', newline='\n') as f:
             if have_rich:
