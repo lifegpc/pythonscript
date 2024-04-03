@@ -84,7 +84,7 @@ def get_m4a_files(dir: str, r: bool) -> List[str]:
         if isdir(file):
             if r:
                 re += get_m4a_files(file, r)
-        elif file.endswith('.m4a') or file.endswith(".flac"):
+        elif file.endswith('.m4a') or file.endswith(".flac") or file.endswith(".mp3"):
             re.append(file)
     return re
 
