@@ -894,13 +894,9 @@ def find_page(d, pid):
             return i
     return None
 
-
-cookies = MozillaCookieJar('google.txt')
-cookies.load()
 ses = Session()
 ses.headers['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36'
 ses.headers['accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
-ses.cookies = cookies
 arg = ArgumentParser(description='Download from Google Play Books', add_help=True, formatter_class=RawTextHelpFormatter)
 arg.add_argument('id', help=wrap("Book's id or url. Id is recommend because url may not be detected."))
 arg.add_argument('-o', '--output', help=wrap('Specify the location of output file. By default it will output to current directory and use "<author> - <title>" as file name.'), metavar='FILE', dest='output')
@@ -912,6 +908,9 @@ arg.add_argument('--7z-compress-level', help=wrap('The compress level when using
 arg.add_argument('--crtl', '--comic-right-to-left', action='store_true', help=wrap('When packaging images as a comic book archive, the sequence of pages will like this: p1, p3, p2, p5, p4 ... This will produce a good archive for Japanese commic. You may need Okular to open archive with facing pages (center first page) view mode.'), dest='crtl')
 args = arg.parse_intermixed_args()
 argsd = vars(args)
+cookies = MozillaCookieJar(args.cookies)
+cookies.load()
+ses.cookies = cookies
 try:
     re = ses.get(f"https://play.google.com/books?authuser={args.authuser}")
     if re.status_code >= 400:
