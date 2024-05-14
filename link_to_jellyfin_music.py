@@ -102,6 +102,8 @@ p.add_argument("-r", "--recursive", help="Recursive search",
 p.add_argument("-c", "--cover", help="Cover file name", default="cover.jpg")
 p.add_argument("-H", "--hardlink", help="Use hard link instead of copy",
                action="store_true", default=False)
+p.add_argument("-d", "--delete", help="Delete output", action="store_true",
+               default=False)
 arg = p.parse_intermixed_args()
 print(arg)
 for f in get_m4a_files(arg.INPUT, arg.recursive):
@@ -114,12 +116,20 @@ for f in get_m4a_files(arg.INPUT, arg.recursive):
         thumb = r[1]
         if arg.verbose:
             print(f"Target thumb: {thumb}")
-        if not exists(thumb):
+        if arg.delete and exists(thumb):
+            remove(thumb)
+        elif not exists(thumb):
             makedirs(split(thumb)[0], exist_ok=True)
             generate_thumb(f, thumb)
-    if not arg.force and exists(r[0]):
-        print(f"File {r[0]} exists, skipped")
-        continue
+    if exists(r[0]):
+        if arg.delete:
+            remove(r[0])
+            if arg.verbose:
+                print(f"File {r[0]} deleted.")
+            continue
+        if not arg.force:
+            print(f"File {r[0]} exists, skipped")
+            continue
     if exists(r[0]):
         remove(r[0])
     makedirs(split(r[0])[0], exist_ok=True)
