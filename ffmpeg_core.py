@@ -15,6 +15,7 @@ from ctypes.util import find_library
 from os.path import exists
 from typing import List
 from platform import system
+from os import environ
 
 
 if system() == 'Windows':
@@ -27,8 +28,15 @@ if exists('ffmpeg_core.dll'):
     dll = 'ffmpeg_core.dll'
 elif exists('ffmpeg_core.so'):
     dll = './ffmpeg_core.so'
+elif environ.get("FFMPEG_CORE"):
+    dll = environ.get("FFMPEG_CORE")
 else:
     dll = find_library('ffmpeg_core') or find_library('_ffmpeg_core')
+    if dll is None:
+        if isWindows:
+            dll = 'ffmpeg_core.dll'
+        else:
+            dll = 'ffmpeg_core.so'
 dll = CDLL(dll)
 free_music_handle = dll.free_music_handle
 free_music_handle.restype = None
