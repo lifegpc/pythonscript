@@ -14,10 +14,19 @@ from ctypes import (
 from ctypes.util import find_library
 from os.path import exists
 from typing import List
+from platform import system
 
 
+if system() == 'Windows':
+    char_type = c_wchar_p
+    isWindows = True
+else:
+    char_type = c_char_p
+    isWindows = False
 if exists('ffmpeg_core.dll'):
     dll = 'ffmpeg_core.dll'
+elif exists('ffmpeg_core.so'):
+    dll = './ffmpeg_core.so'
 else:
     dll = find_library('ffmpeg_core') or find_library('_ffmpeg_core')
 dll = CDLL(dll)
@@ -63,16 +72,16 @@ ffmpeg_core_dump_ffmpeg_configuration.restype = None
 ffmpeg_core_dump_ffmpeg_configuration.argtypes = [c_int, c_int]
 ffmpeg_core_open = dll.ffmpeg_core_open
 ffmpeg_core_open.restype = c_int
-ffmpeg_core_open.argtypes = [c_wchar_p, POINTER(c_void_p)]
+ffmpeg_core_open.argtypes = [char_type, POINTER(c_void_p)]
 ffmpeg_core_open2 = dll.ffmpeg_core_open2
 ffmpeg_core_open2.restype = c_int
-ffmpeg_core_open2.argtypes = [c_wchar_p, POINTER(c_void_p), c_void_p]
+ffmpeg_core_open2.argtypes = [char_type, POINTER(c_void_p), c_void_p]
 ffmpeg_core_open3 = dll.ffmpeg_core_open3
 ffmpeg_core_open3.restype = c_int
-ffmpeg_core_open3.argtypes = [c_wchar_p, POINTER(c_void_p), c_void_p, c_wchar_p]  # noqa: E501
+ffmpeg_core_open3.argtypes = [char_type, POINTER(c_void_p), c_void_p, char_type]  # noqa: E501
 ffmpeg_core_info_open = dll.ffmpeg_core_info_open
 ffmpeg_core_info_open.restype = c_int
-ffmpeg_core_info_open.argtypes = [c_wchar_p, POINTER(c_void_p)]
+ffmpeg_core_info_open.argtypes = [char_type, POINTER(c_void_p)]
 ffmpeg_core_play = dll.ffmpeg_core_play
 ffmpeg_core_play.restype = c_int
 ffmpeg_core_play.argtypes = [c_void_p]
@@ -98,7 +107,7 @@ ffmpeg_core_get_err_msg = dll.ffmpeg_core_get_err_msg
 ffmpeg_core_get_err_msg.restype = c_void_p
 ffmpeg_core_get_err_msg.argtypes = [c_int]
 ffmpeg_core_get_err_msg2 = dll.ffmpeg_core_get_err_msg2
-ffmpeg_core_get_err_msg2.restype = c_wchar_p
+ffmpeg_core_get_err_msg2.restype = char_type
 ffmpeg_core_get_err_msg2.argtypes = [c_int]
 ffmpeg_core_get_cur_position = dll.ffmpeg_core_get_cur_position
 ffmpeg_core_get_cur_position.restype = c_int64
@@ -170,6 +179,10 @@ if version >= [1, 0, 0, 2]:
     ffmpeg_core_set_reverb = dll.ffmpeg_core_set_reverb
     ffmpeg_core_set_reverb.restype = c_int
     ffmpeg_core_set_reverb.argtypes = [c_void_p, c_int, c_float, c_float]
+if version >= [1, 1, 1, 0]:
+    ffmpeg_core_settings_set_max_wait_buffer_time = dll.ffmpeg_core_settings_set_max_wait_buffer_time  # noqa: E501
+    ffmpeg_core_settings_set_max_wait_buffer_time.restype = c_int
+    ffmpeg_core_settings_set_max_wait_buffer_time.argtypes = [c_void_p, c_int]  # noqa: E501
 
 
 class FFMPEGCoreError(Exception):
@@ -182,7 +195,7 @@ class FFMPEGCoreError(Exception):
             else:
                 self.msg = ffmpeg_core_get_err_msg2(err)
         else:
-            self.msg = c_wchar_p(t).value
+            self.msg = char_type(t).value
             ffmpeg_core_free(t)
         Exception.__init__(self, f"{self.err} {self.msg}")
 
@@ -214,7 +227,7 @@ class FFMPEGCoreSettings:
 
     def set_max_wait_time(self, time: int):
         if version >= [1, 0, 0, 1]:
-            ffmpeg_core_settings_set_max_wait_time(self._h, time)
+            return not ffmpeg_core_settings_set_max_wait_time(self._h, time)
         else:
             raise FFMPEGHigherVersionNeededError
 
@@ -224,12 +237,20 @@ class FFMPEGCoreSettings:
         else:
             raise Exception('WASAPI is not supported')
 
+    def set_max_wait_buffer_time(self, time: int):
+        if version >= [1, 1, 1, 0]:
+            return not ffmpeg_core_settings_set_max_wait_buffer_time(self._h, time)
+        else:
+            raise FFMPEGHigherVersionNeededError
+
 
 class FFMPEGCore:
     def __init__(self, fn: str, settings: FFMPEGCoreSettings = None):
         self._fn = fn
         self._h = c_void_p()
         self._opened = False
+        if not isWindows:
+            fn = fn.encode()
         if settings is None:
             r = ffmpeg_core_open(fn, pointer(self._h))
         else:
@@ -369,6 +390,6 @@ class FFMPEGCore:
         if self._opened:
             h = ffmpeg_core_get_metadata(self._h, k)
             if h:
-                t = c_wchar_p(h).value
+                t = char_type(h).value
                 ffmpeg_core_free(h)
                 return t
