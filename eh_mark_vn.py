@@ -4,7 +4,7 @@ from sys import exit
 from re import compile
 
 
-BGI = compile(r'^(tmb_)?([ehm]v\d+[a-z_]?|scene\d+)\.(jpg|png)$')
+BGI = compile(r'^(tmb_|ex_)?([ehm]v\d+[a-z_]*|scene\d+)\.(jpg|png)$')
 p = ArgumentParser()
 p.add_argument('-b', '--base', default='http://localhost:8080', help='API Host')  # noqa: E501
 p.add_argument('-t', '--token', help='Token')
