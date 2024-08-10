@@ -5,13 +5,14 @@ from re import compile
 
 
 BGI = compile(r'^(tmb_|ex_)?([ehm]v\d+[a-z_]*|scene\d+)\.(jpg|png)$')
+KRKR = compile(r'^(E[VC]H?\d+H?(_\d+[a-z_]*)?|img_.*)\.(jpg|png)$')
 p = ArgumentParser()
 p.add_argument('-b', '--base', default='http://localhost:8080', help='API Host')  # noqa: E501
 p.add_argument('-t', '--token', help='Token')
 p.add_argument('-p', '--print', action='store_true', default=False, help='Print page')  # noqa: E501
 p.add_argument('-d', '--dryrun', action='store_true', default=False, help='Dry run')  # noqa: E501
 p.add_argument('gid', help='Gallery id', type=int)
-p.add_argument('typ', nargs='?', default='auto', choices=['auto', 'bgi'], help='Engine')  # noqa: E501
+p.add_argument('typ', nargs='?', default='auto', choices=['auto', 'bgi', 'krkr'], help='Engine')  # noqa: E501
 arg = p.parse_intermixed_args()
 
 
@@ -45,6 +46,18 @@ def bgi_check_pages(pages, changes):
             mark(p, changes, False, False)
 
 
+def krkr_check_pages(pages, changes):
+    for p in pages:
+        name: str = p['name']
+        ns = name.split('_')
+        if ns[0].startswith("EVH"):
+            mark(p, changes, True, False)
+        elif ns[0].startswith("EV") and ns[0].endswith("H"):
+            mark(p, changes, True, False)
+        else:
+            mark(p, changes, False, False)
+
+
 def guess_as_bgi(pages):
     c = 0
     for p in pages:
@@ -54,11 +67,24 @@ def guess_as_bgi(pages):
     return c / len(pages)
 
 
+def guess_as_krkr(pages):
+    c = 0
+    for p in pages:
+        name: str = p['name']
+        if name.startswith('_') or KRKR.match(name):
+            c += 1
+    return c / len(pages)
+
+
 def guess_engine(pages):
     bgi = guess_as_bgi(pages)
     print('BGI coverage:', bgi)
     if bgi >= 0.9:
         return 'bgi'
+    krkr = guess_as_krkr(pages)
+    print('KRKR coverage:', krkr)
+    if krkr >= 0.9:
+        return krkr
     return None
 
 
@@ -80,6 +106,8 @@ with EHC() as c:
     changes = []
     if typ == 'bgi':
         bgi_check_pages(pages, changes)
+    elif typ == 'krkr':
+        krkr_check_pages(pages, changes)
     if arg.dryrun:
         exit(0)
     c.update_file_meta_json(changes)
