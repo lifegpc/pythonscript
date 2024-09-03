@@ -6,7 +6,7 @@ from typing import List
 import taglib
 
 
-ARTIST_SEP = re.compile(r'(/|&)')
+ARTIST_SEP = re.compile(r'(/|&|;)')
 
 
 def get_files(dir: str, r: bool) -> List[str]:
@@ -26,7 +26,7 @@ def get_files(dir: str, r: bool) -> List[str]:
     return re
 
 
-def fix_tag(file: str):
+def fix_tag(file: str, verbose: bool):
     f = taglib.File(file)
     need_save = False
 
@@ -39,6 +39,8 @@ def fix_tag(file: str):
         f.tags[tag] = value
 
     try:
+        if verbose:
+            print(file)
         for tag in f.tags:
             value = f.tags[tag]
             if tag in ['ARTIST', 'ALBUMARTIST']:
@@ -50,11 +52,13 @@ def fix_tag(file: str):
                         need_change = True
                     for a in r:
                         ar = a.strip()
-                        if ar in ['&', '/']:
+                        if ar in ['&', '/', ';']:
                             continue
                         result.append(ar)
                 if need_change:
                     change(tag, result)
+                elif verbose:
+                    print(tag, f.tags[tag])
         if need_save:
             f.save()
     finally:
@@ -65,6 +69,8 @@ p = ArgumentParser()
 p.add_argument("INPUT", help="Input directory")
 p.add_argument("-r", "--recursive", help="Recursive search",
                action="store_true", default=False)
+p.add_argument("-v", "--verbose", help="verbose output",
+               action="store_true", default=False)
 arg = p.parse_intermixed_args()
 for f in get_files(arg.INPUT, arg.recursive):
-    fix_tag(f)
+    fix_tag(f, arg.verbose)
