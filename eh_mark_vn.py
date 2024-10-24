@@ -13,13 +13,15 @@ HOSHIKOI_H_LIST = ['etc06', 'nagi08', 'nagi09', 'nagi10', 'nagi11', 'nagi12', 'n
 LOS_BGI = compile(r'^h?ev(sd)?h?_.*\.(png|jpg)')
 # Lump of Sugar ねこツク、さくら。
 LOS_BGI_H = compile(r'^ev_[a-z]h.*\.(png|jpg)')
+# CIRCUS D.C.
+CIRCUS_DC = compile(r'((dc\d|\dfd)(r?)_ev_|ev_(dc\d|\dfd)(r?)_|cut|ed_|eyecatch_|MAP_|bg)[a-z_0-9A-Z]*\.(jpg|png)$')  # noqa: E501
 p = ArgumentParser()
 p.add_argument('-b', '--base', default='http://localhost:8080', help='API Host')  # noqa: E501
 p.add_argument('-t', '--token', help='Token')
 p.add_argument('-p', '--print', action='store_true', default=False, help='Print page')  # noqa: E501
 p.add_argument('-d', '--dryrun', action='store_true', default=False, help='Dry run')  # noqa: E501
 p.add_argument('gid', help='Gallery id', type=int)
-p.add_argument('typ', nargs='?', default='auto', choices=['auto', 'cabbage-soft', 'cabbage-soft/hoshikoi-twinkle'], help='Type')  # noqa: E501
+p.add_argument('typ', nargs='?', default='auto', choices=['auto', 'cabbage-soft', 'cabbage-soft/hoshikoi-twinkle', 'circus/dc'], help='Type')  # noqa: E501
 arg = p.parse_intermixed_args()
 
 
@@ -76,6 +78,19 @@ def check_hoshikoi_twinkle(pages):
             mark(p, changes, False, False)
 
 
+def check_circus_dc(pages):
+    for p in pages:
+        name: str = p['name']
+        m = CIRCUS_DC.match(name)
+        if not m:
+            continue
+        t = m.group(3) or m.group(5)
+        if t:
+            mark(p, changes, True, False)
+        else:
+            mark(p, changes, False, False)
+
+
 def guess_cabbage_soft(pages):
     c = 0
     for p in pages:
@@ -91,8 +106,15 @@ def guess_hoshikoi_twinkle(pages):
         name: str = p['name']
         if name.startswith('_') or HOSHIKOI_TWINKLE.match(name):
             c += 1
-        else:
-            print(name)
+    return c / len(pages)
+
+
+def guess_circus_dc(pages):
+    c = 0
+    for p in pages:
+        name: str = p['name']
+        if name.startswith('_') or CIRCUS_DC.match(name):
+            c += 1
     return c / len(pages)
 
 
@@ -106,6 +128,11 @@ def guess_engine(pages, tags):
         print("星恋＊ティンクル coverage:", hoshikoi)
         if hoshikoi >= 0.9:
             return 'cabbage-soft/hoshikoi-twinkle'
+    if check_tag(tags, 'group:circus'):
+        dc = guess_circus_dc(pages)
+        print("CIRCUS D.C. coverage:", dc)
+        if dc >= 0.9:
+            return 'circus/dc'
     return None
 
 
@@ -130,6 +157,8 @@ with EHC() as c:
         check_cabbage_soft_pages(pages)
     elif typ == 'cabbage-soft/hoshikoi-twinkle':
         check_hoshikoi_twinkle(pages)
+    elif typ == 'circus/dc':
+        check_circus_dc(pages)
     if arg.dryrun:
         exit(0)
     c.update_file_meta_json(changes)
