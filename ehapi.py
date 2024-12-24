@@ -20,6 +20,26 @@ class EHC:
     def get_gallery(self, gid: int):
         return self.handle_api_result(self.get(f"/gallery/{gid}"))
 
+    def list_galleries(self, offset: int = 0, limit: int = 20,
+                       all: bool = False, fields: str = '*',
+                       sort_by_gid: bool = None, uploader: str = None,
+                       category: str = None):
+        params = {}
+        if not all:
+            params['offset'] = offset
+            params['limit'] = limit
+        else:
+            params['all'] = '1'
+        if fields and fields != '*':
+            params['fields'] = fields
+        if sort_by_gid is not None:
+            params['sort_by_gid'] = '1' if sort_by_gid else '0'
+        if uploader:
+            params['uploader'] = uploader
+        if category:
+            params['category'] = category
+        return self.handle_api_result(self.get("/gallery/list", params=params))
+
     def handle_api_result(self, re: Response):
         re = re.json()
         if re['ok']:
