@@ -141,3 +141,5 @@ dmypy.json
 *.yml
 *.conf
 !*.example.yaml
+*.jsonl
+tiktokencache
