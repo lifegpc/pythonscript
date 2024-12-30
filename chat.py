@@ -1,4 +1,5 @@
 import openai
+import httpx
 import yaml
 import argparse
 import asyncio
@@ -84,12 +85,29 @@ class Config:
             return self._cfg['store']
         return False
 
+    @property
+    def proxy(self) -> Optional[str]:
+        if self._args.proxy:
+            return self._args.proxy
+        if 'proxy' in self._cfg and isinstance(self._cfg['proxy'], str):
+            return self._cfg['proxy']
+        return None
+
+    @property
+    def skip_verify(self) -> bool:
+        if self._args.skip_verify:
+            return self._args.skip_verify
+        if 'skip_verify' in self._cfg and isinstance(self._cfg['skip_verify'], bool):  # noqa: E501
+            return self._cfg['skip_verify']
+        return False
+
 
 def load_config(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         config = yaml.safe_load(file)
     openai.api_key = config['api_key']
-    openai.base_url = config['base_url']
+    if 'base_url' in config:
+        openai.base_url = config['base_url']
     return config
 
 
@@ -105,8 +123,10 @@ def get_user_prompt():
 
 
 async def stream_response(messages, prompt, args: Config):
+    cli = httpx.AsyncClient(proxy=args.proxy, verify=not args.skip_verify)
     client = openai.AsyncClient(api_key=openai.api_key,
-                                base_url=openai.base_url)
+                                base_url=openai.base_url,
+                                http_client=cli)
     messages.append({"role": "user", "content": prompt})
     response = await client.chat.completions.create(
         model=args.model,
@@ -171,6 +191,8 @@ parser.add_argument('-t', '--temperature', type=float, help='What sampling tempe
 parser.add_argument('-p', '--top-p', type=float, help='An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.')  # noqa: E501
 parser.add_argument('-P', '--presence-penalty', type=float, help="Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.")  # noqa: E501
 parser.add_argument('-s', '--store', action='store_true', help='Whether or not to store the output of this chat completion request for use in our model distillation or evals products.')  # noqa: E501
+parser.add_argument('-x', '--proxy', type=str, help='Proxy server URL to use for requests')  # noqa: E501
+parser.add_argument('-k', '--skip-verify', action='store_true', help='Skip SSL certificate verification for HTTPS requests')  # noqa: E501
 
 
 if __name__ == "__main__":
