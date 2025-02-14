@@ -140,13 +140,23 @@ async def stream_response(messages, prompt, args: Config):
         stream=True
     )
     res = ''
+    thinking = -1
     async for chunk in response:
         if chunk.choices:
             choice = chunk.choices[0]
-            if choice.delta and choice.delta.content:
-                data = choice.delta.content
-                res += data
-                print(data, end='', flush=True)
+            if choice.delta:
+                if choice.delta.reasoning_content:
+                    if thinking == -1:
+                        thinking = 0
+                        print('Start thinking')
+                    print(choice.delta.reasoning_content, end='', flush=True)
+                if choice.delta.content:
+                    if thinking == 0:
+                        thinking = 1
+                        print('End thinking')
+                    data = choice.delta.content
+                    res += data
+                    print(data, end='', flush=True)
     print(flush=True)
     if chunk.usage:
         print(f"Usage: {chunk.usage.to_json(indent=None)}")
@@ -188,7 +198,7 @@ parser.add_argument('-c', '--config', type=str, default='./chat.yml', help='Path
 parser.add_argument('-o', '--output', type=str, help='Path to the output JSONL file')  # noqa: E501
 parser.add_argument('-i', '--include-usage', action='store_true', help='Include usage information in the response')  # noqa: E501
 parser.add_argument('-t', '--temperature', type=float, help='What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. ')  # noqa: E501
-parser.add_argument('-p', '--top-p', type=float, help='An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.')  # noqa: E501
+parser.add_argument('-p', '--top-p', type=float, help='An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10%% probability mass are considered.')  # noqa: E501
 parser.add_argument('-P', '--presence-penalty', type=float, help="Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.")  # noqa: E501
 parser.add_argument('-s', '--store', action='store_true', help='Whether or not to store the output of this chat completion request for use in our model distillation or evals products.')  # noqa: E501
 parser.add_argument('-x', '--proxy', type=str, help='Proxy server URL to use for requests')  # noqa: E501
