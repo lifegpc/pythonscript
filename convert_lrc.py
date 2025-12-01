@@ -76,7 +76,7 @@ class Lyric:
                 re.append({'time': max(ltmp, round(i['time'] - 0.01, 2)),
                            'data': tmp})
                 tmp = None
-            elif i['time'] == ltmp:
+            elif i['time'] == ltmp and i['time'] != 0:
                 if tmp is None:
                     tmp = i['data']
                 else:
